@@ -1,0 +1,9 @@
+cement==3.0.8
+cement[jinja2]
+cement[yaml]
+cement[colorlog]
+sqlalchemy
+sqlalchemy.orm
+pyfiglet
+python-dotenv
+prompt_toolkit

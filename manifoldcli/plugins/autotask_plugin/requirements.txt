@@ -1,0 +1,1 @@
+pyautotask @ git+https://github.com/TechCollective/pyautotask@feature
