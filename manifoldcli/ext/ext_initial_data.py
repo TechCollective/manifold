@@ -16,3 +16,4 @@ def add_initial_data(app):
     db.add("Radar Detected")
     db.add("IPS")
     db.add("No Contract")
+    db.add("Poe Overload")

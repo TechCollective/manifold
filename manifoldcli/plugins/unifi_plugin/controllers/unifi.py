@@ -191,7 +191,7 @@ class UniFi(Controller):
                 'dest': 'site_id'
             }),
             (['--controller-name'], {
-                'help': "Site ID you will to sync",
+                'help': "Controller you will to sync",
                 'required': True,
                 'dest': 'controller_name'
             })]
@@ -199,3 +199,26 @@ class UniFi(Controller):
     def site_health(self):
         unifi = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
         unifi.site_health(self.app.pargs.controller_name, self.app.pargs.site_id)
+
+    @ex(
+        help='Get device json',
+        arguments=[
+            (['--mac'], {
+                'help': "mac address of device",
+                'required': True,
+                'dest': 'mac'
+            }),
+            (['--site-id'], {
+                'help': "Site ID you will to sync",
+                'required': True,
+                'dest': 'site_id'
+            }),
+            (['--controller-name'], {
+                'help': "Controler name you will to sync",
+                'required': True,
+                'dest': 'controller_name'
+            })]
+    )
+    def pull_device(self):
+        unifi = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
+        unifi.pull_device_by_mac(self.app.pargs.mac, self.app.pargs.controller_name, self.app.pargs.site_id)

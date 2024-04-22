@@ -11,6 +11,8 @@ import json
 import pytz
 from datetime import datetime, timedelta
 import dateutil.parser
+import multiprocessing
+import time
 import re
 
 class UniFiControllerHandler(UniFiControllerInterface, Handler):
@@ -98,12 +100,12 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
         sites_db = session.query(UniFi_Sites).filter_by(controller_key=controller.primary_key).all()
         for site_db in sites_db:
             on_controller = False
+            
             for site in sites:
                 if site_db.name == site['name']:
                     on_controller = True
-            
             if on_controller == False:
-                self.app.log.info("[UniFi plugin] Deleting Site from DB: site not found in controller. [Site: " + site['desc'] + " Site ID: " + site['name'] + "]")
+                self.app.log.debug("[UniFi plugin] Deleting Site from DB: site not found in controller. [Site: " + site_db.desc + " Site ID: " + site_db.name + "]")
                 session.delete(session.merge(site_db))
                 session.commit()
         session.close()
@@ -116,10 +118,11 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
             site (site_obj): all information for the site.
             controller (controller_obj): all information for the controller.
         """
-
+        
         existing_entry = self.app.session.query(UniFi_Sites).filter_by(name=site['name'], controller_key=controller.primary_key).first()
         
         if existing_entry:
+            self.app.log.debug("[UniFi plugin] Syncing Site: " + existing_entry.desc )
             changed = False
             if existing_entry.id != site['_id']:
                 existing_entry.id = site['_id']
@@ -131,7 +134,11 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
                 self.app.log.debug("[UniFi plugin] Updating Site in DB:  [Site: " + site['desc'] + " Site ID: " + site['name'] + "]")
                 self.app.session.commit()
                 # FIXME Might trigger a hook
+            if existing_entry.parent_id:
+                unifi = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
+                unifi.alert.verify_contract(existing_entry)
         else:
+            self.app.log.debug("[UniFi plugin] New Site: " + existing_entry.desc + " Site ID: " + existing_entry.name )
             site_db = UniFi_Sites(
                 name = site['name'],
                 id = site['_id'],
@@ -234,23 +241,44 @@ class UniFiDeviceHandler(UniFiDeviceInterface, Handler):
 
     def sync_site(self, controller_name, site_id):
         controller = self.app.session.query(UniFi_Controllers).filter_by(name=controller_name).first()
-        
+        unifi_site_db = self.app.session.query( UniFi_Sites ).filter_by( name=site_id, controller_key=controller.primary_key  ).first()
         c = UniFiControllerHandler.controller_api_object(self, controller, site_id)
 
-        devices = c.get_aps()
-        for device in devices:
-            if device.get('serial') is not None and device.get('adopted'):
-                self.update_db(device, site_id, controller)
-            else:
-                # TODO Figure out what to do with these
-                # Not sure what to do with these. I'm guessing that we should generate a ticket to have them removed.
-                # Might be able to use disconnection_reason': "MISSED_INFORM, last_seen '1692203911', considered_lost '1692203921', state: 5", 
-                # Also weird keys. 'anomalies': -1 and 'satisfaction': -1, 
-                # For now skipping
-                self.app.log.warning("[UniFi plugin] Device has no serial number. [Device: " + device['name'] + "]")
-                self.app.log.warning("[UniFi plugin] Device Json: " + str(device))
-            unifi_api = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
-            unifi_api.alert.device_alerts(device)
+        if unifi_site_db.parent_id:
+            devices = c.get_aps()
+            for device in devices:
+                if device.get('serial') is not None and device.get('adopted'):
+                    self.update_db(device, site_id, controller)
+
+                    unifi_api = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
+                    device_db = self.app.session.query( Devices ).filter_by( serial=device['serial'] ).first()
+                    company_db = self.app.session.query( Companies ).filter_by( primary_key=unifi_site_db.parent_id  ).first()
+
+                    alert_obj = unifi_api.alert.UniFiAlertObject(
+                        alert_unifi = None,
+                        controller = controller, 
+                        site_name = site_id,
+                        connection = c,
+                        device_unifi = device,
+                        source_db = self.app.session.query( Sources ).filter_by(plugin_name="UniFi", tenant_key=controller.primary_key).first(), 
+                        devices=[device_db], 
+                        company_db=company_db
+                    )
+                    unifi_api.alert.device_alerts(alert_obj)
+
+                elif device.get('serial') is None:
+                    # TODO Figure out what to do with these
+                    # Not sure what to do with these. I'm guessing that we should generate a ticket to have them removed.
+                    # Might be able to use disconnection_reason': "MISSED_INFORM, last_seen '1692203911', considered_lost '1692203921', state: 5", 
+                    # Also weird keys. 'anomalies': -1 and 'satisfaction': -1, 
+                    # For now skipping
+                    self.app.log.warning("[UniFi plugin] Device has no serial number. [Device: " + device['name'] + "]")
+                    self.app.log.warning("[UniFi plugin] Device Json: " + str(device))
+                elif device.get('adopted') == False:
+                    # Not sure I want to do anything with devices not adapted. Just tagging this in case I do
+                    pass
+        else:
+            self.app.log.warning("[UniFi plugin] Site: " + unifi_site_db.desc + "is not assoicated with a company. Skipping.")
 
     def _create_device_object(self,device):
         if device['name'] == None:
@@ -342,6 +370,7 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                              company_db=company_db, 
                              title_append=title_append,
                              useful_information=useful_information)
+            self._alert_unifi = None
 
             if alert_unifi is not None:
                 self.alert_unifi = alert_unifi
@@ -354,67 +383,97 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             if device_unifi is not None:
                 self.device_unifi = device_unifi
 
+        @property
+        def alert_unifi(self):
+            return self._alert_unifi
+        
+        @alert_unifi.setter
+        def alert_unifi(self, alert_unifi):
+            self._alert_unifi = alert_unifi
+
     def _archive_alert(self, c, alert_id):
         params = {'_id': alert_id}
         return c._run_command('archive-alarm', params, mgr="evtmgr")
-    
-    def device_alerts(self, device_unifi):
-        if device_unifi.get('unsupported') is not None:
-            if device_unifi['unsupported']:
-                self.app.log.warning("[UniFi plugin] Device: " + device_unifi['name'] + " is unsupported. Reason: " + str(device_unifi['unsupported_reason']))
+
+    def device_alert_state(self, alert_obj):
+        # States I have some information about
+        # State 0: Disconnected
+        # State 1: Connected
+        # State 2: Not adopted (I think) - ChatGPT: Pending
+        # State 3: ChatGPT: Adopting
+        # State 4: ChatGPT: Upgrading
+        # State 5: ChatGPT: Failed
+        # State 6: ChatGPT: Inactive
+        # State 11: Isolated (I think)
+
+        if alert_obj.device_unifi['state'] == 0:
+
+            self.app.log.warning("[UniFi plugin] Device: " + alert_obj.device_unifi['name'] + " is state 0")
+            alert_obj.alert_type =  self.app.session.query( AlertTypes ).filter_by(name="Lost Contact").first()
+            unifi_site_db = self.app.session.query( UniFi_Sites ).filter_by( name=alert_obj.site_name, controller_key=alert_obj.controller.primary_key  ).first()
+            alert_obj.title_append = " (" + str(unifi_site_db.desc) + ")"
+            alert_obj.useful_information = "UniFi Controller: https://" +  alert_obj.controller.host + ":" + str(alert_obj.controller.port) + "/manage/" + str(alert_obj.site_name) +"/"
+
+            self.alert_lost_contact(alert_obj)
+
+        elif alert_obj.device_unifi['state'] > 1:
+            self.app.log.warning("[UniFi plugin] Device: " + alert_obj.device_unifi['name'] + " is state " + str(alert_obj.device_unifi['state']))
+
+    def device_alerts(self, alert_obj):
+        if alert_obj.device_unifi.get('state') is not None:
+            if alert_obj.device_unifi['state'] != 1:
+                self.device_alert_state(alert_obj)
+
+        if alert_obj.device_unifi.get('unsupported') is not None:
+            if alert_obj.device_unifi['unsupported']:
+                self.app.log.warning("[UniFi plugin] Device: " + alert_obj.device_unifi['name'] + " is unsupported. Reason: " + str(alert_obj.device_unifi['unsupported_reason']))
         # if device_unifi.get('internet') is not None:
         #     self.app.log.warning("[UniFi plugin] No internet [Device: " + device_unifi['name'] + "]")
         # Verify device has the correct inform url
-        if device_unifi.get('inform_url') is not None:
+        if alert_obj.device_unifi.get('inform_url') is not None:
             # TODO, need to create the inform url from the controller.
             pass
-        if device_unifi.get('sys_error_caps') is not None:
-            if device_unifi['sys_error_caps'] > 0:
-                self.app.log.error("[UniFi plugin] Device error: sys_error_caps - " + device_unifi['sys_error_caps'])
-                self.app.log.error("[UniFi plugin] Device: " + str(device_unifi))
+        if alert_obj.device_unifi.get('sys_error_caps') is not None:
+            if alert_obj.device_unifi['sys_error_caps'] > 0:
+                self.app.log.error("[UniFi plugin] Device error: sys_error_caps - " + alert_obj.device_unifi['sys_error_caps'])
+                self.app.log.error("[UniFi plugin] Device: " + str(alert_obj.device_unifi))
                 sys.exit()
-        if device_unifi.get('model_incompatible') is not None:
-            if device_unifi['model_incompatible']:
+        if alert_obj.device_unifi.get('model_incompatible') is not None:
+            if alert_obj.device_unifi['model_incompatible']:
                 print('model_incompatible')
-                print(device_unifi['model_incompatible'])
-                self.app.log.error("[UniFi plugin] Device: " + str(device_unifi))
+                print(alert_obj.device_unifi['model_incompatible'])
+                self.app.log.error("[UniFi plugin] Device: " + str(alert_obj.device_unifi))
                 sys.exit()
-        if device_unifi.get('model_in_eol') is not None:
-            if device_unifi['model_in_eol']:
-                self.app.log.warning("[UniFi plugin] Device: " + device_unifi['name'] + " is EOL")
-        if device_unifi.get('has_temperature') is not None:
-            if device_unifi['has_temperature']:
-                if device_unifi.get('overheating'):
-                    self.app.log.warning("[UniFi plugin] Device: " + device_unifi['name'] + " is overheating. General_temperature: " + str(device_unifi['general_temperature']))
-                    print(device_unifi)
-                    self.app.log.error("[UniFi plugin] Device: " + str(device_unifi))
+        if alert_obj.device_unifi.get('model_in_eol') is not None:
+            if alert_obj.device_unifi['model_in_eol']:
+                self.app.log.warning("[UniFi plugin] Device: " + alert_obj.device_unifi['name'] + " is EOL")
+        if alert_obj.device_unifi.get('has_temperature') is not None:
+            if alert_obj.device_unifi['has_temperature']:
+                if alert_obj.device_unifi.get('overheating'):
+                    self.app.log.warning("[UniFi plugin] Device: " + alert_obj.device_unifi['name'] + " is overheating. General_temperature: " + str(alert_obj.device_unifi['general_temperature']))
+                    self.app.log.error("[UniFi plugin] Device: " + str(alert_obj.device_unifi))
                     sys.exit()
-        if device_unifi.get('model_in_lts') is not None:
-            if device_unifi['model_in_lts']:
+        if alert_obj.device_unifi.get('model_in_lts') is not None:
+            if alert_obj.device_unifi['model_in_lts']:
                 print('model_in_lts')
-                print(device_unifi['model_in_lts'])
-                self.app.log.error("[UniFi plugin] Device: " + str(device_unifi))
+                print(alert_obj.device_unifi['model_in_lts'])
+                self.app.log.error("[UniFi plugin] Device: " + str(alert_obj.device_unifi))
                 sys.exit()
-        if device_unifi.get('state') is not None:
-            if device_unifi['state'] == 0:
-                self.app.log.warning("[UniFi plugin] Device: " + device_unifi['name'] + " is state 0")
-            elif device_unifi['state'] > 1:
-                self.app.log.warning("[UniFi plugin] Device: " + device_unifi['name'] + " is state " + str(device_unifi['state']))
-        if device_unifi.get('upgrade_state') is not None:
-            if device_unifi['upgrade_state'] != 0:
+        if alert_obj.device_unifi.get('upgrade_state') is not None:
+            if alert_obj.device_unifi['upgrade_state'] != 0:
                 print('upgrade_state')
-                print(device_unifi['upgrade_state'])
-                self.app.log.error("[UniFi plugin] Device: " + str(device_unifi))
+                print(alert_obj.device_unifi['upgrade_state'])
+                self.app.log.error("[UniFi plugin] Device: " + str(alert_obj.device_unifi))
                 sys.exit()
-        if device_unifi.get('anomalies') is not None:
-            if device_unifi['anomalies'] != -1:
-                print('anomalies')
-                print(device_unifi['anomalies'])
-                self.app.log.error("[UniFi plugin] Device: " + str(device_unifi))
+        if alert_obj.device_unifi.get('anomalies') is not None:
+            if alert_obj.device_unifi['anomalies'] != -1:
+                self.app.log.error("[UniFi plugin] Device 'anomalies'")
+                self.app.log.error("[UniFi plugin] Device: " + str(alert_obj.device_unifi))
+                self.app.log.error("[UniFi plugin] " + str(alert_obj.device_unifi['anomalies']))
                 sys.exit()
-        if device_unifi.get('model_incompatible') is not None:
-            if device_unifi['model_incompatible']:
-                self.app.log.warning("[UniFi plugin] Device: " + device_unifi['name'] + " has 'model_incompatible' " + str(device_unifi['model_incompatible']))
+        if alert_obj.device_unifi.get('model_incompatible') is not None:
+            if alert_obj.device_unifi['model_incompatible']:
+                self.app.log.warning("[UniFi plugin] Device: " + alert_obj.device_unifi['name'] + " has 'model_incompatible' " + str(alert_obj.device_unifi['model_incompatible']))
 
     def check_get_device_stat(self, c, mac):
         url = c._api_url() + "stat/device/" + mac
@@ -427,7 +486,8 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             if obj["meta"]["rc"] != "ok":
                 if obj['meta']['msg'] != "api.err.UnknownDevice":
     #				raise APIError(obj["meta"]["msg"])
-                    print("Unknown Device: " + obj['meta']['msg'])
+                    #print("Unknown Device: " + obj['meta']['msg'])
+                    self.app.log.error("Unknown Device: " + obj['meta']['msg'])
         if "data" in obj:
             result = obj["data"]
         else:
@@ -477,7 +537,13 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             self.app.log.info("[UniFi plugin] " + str(unifi_alert))
 
         if device_mac:
-            return self.check_get_device_stat(c, device_mac)
+            device_stat = self.check_get_device_stat(c, device_mac)
+            if device_stat: 
+                return device_stat[0]
+            else:
+                self.app.log.error("[UniFi plugin] UniFi return nonthing for deivce. " + str(unifi_alert))    
+        else:
+            self.app.log.error("[UniFi plugin] Didn't find mac from alert. " + str(unifi_alert))
 
     def get_alert_type_from_alert(self, unifi_alert):
         # unifi alert key is usally in the format of 'EVT_SW_Lost_Contact' This takes the key and splits in along the '_'
@@ -494,6 +560,8 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             alert_type_name ="Radar Detected"
         elif unifi_alert['key'] == "EVT_SW_StpPortBlocking":
             alert_type_name = "Stp Port Blocking"
+        elif unifi_alert['key'] == 'EVT_SW_PoeOverload':
+            alert_type_name = "Poe Overload"
         # LTE Stuff
         elif unifi_alert['key'] == "EVT_LTE_HardLimitUsed":
             alert_type_name = "LTE Hard Limit Used"
@@ -524,14 +592,16 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
         c = UniFiControllerHandler.controller_api_object(self, controller, unifi_site_db.name)
 
         device_unifi = self.get_unifi_device_from_alert(c, unifi_alert)
+
         if device_unifi is not None and device_unifi:
             self.app.log.debug("[UniFi plugin] " + company_db.name + " - device pulled from Unifi.")
-            device_db = self.app.session.query( Devices ).filter_by( serial=device_unifi[0]['serial'] ).first()
+            device_db = self.app.session.query( Devices ).filter_by( serial=device_unifi['serial'] ).first()
+            
             if not device_db:
                 self.app.log.debug("[UniFi plugin] Add device to Database")
                 api_devices = self.app.handler.get('unifi_device_interface', 'unifi_device_handler', setup=True)
-                api_devices.update_db(device_unifi[0], unifi_site_db.name, controller)
-                device_db = self.app.session.query( Devices ).filter_by( serial=device_unifi[0]['serial'] ).first()
+                api_devices.update_db(device_unifi, unifi_site_db.name, controller)
+                device_db = self.app.session.query( Devices ).filter_by( serial=device_unifi['serial'] ).first()
 
         # TODO The alert processing functions are not using last_timestamp, maybe fix them to use this instead of the orginal datetime from the event
         
@@ -566,11 +636,13 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
     def alert_site_down(self, alert_obj):
         self.app.log.error("[UniFi plugin] Site Down")
         c = alert_obj.connection
-        alert_obj.alert_type = "Site Down"
+        alert_obj.alert_type =  self.app.session.query( AlertTypes ).filter_by(name="Internet Outage").first()
 
         db_alerts = self.app.handler.get('db_interface', 'db_alerts', setup=True)
         db_alerts.add(alert_obj, "UniFi")
-        self._archive_alert(c, alert_obj.alert_unifi['_id'])
+
+        if alert_obj.alert_unifi is not None:
+            self._archive_alert(c, alert_obj.alert_unifi['_id'])
 
     def find_gateway(self, devices_unifi):
         # devices_unifi output to c.get_aps()
@@ -588,10 +660,11 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
 
         device = alert_obj.device_unifi
         if device:
-            if device[0]['state'] == 1:
+            if device['state'] == 1:
                 self.app.log.debug("[UniFi plugin] Device is online now, archiving alert")
-                self._archive_alert(c, alert_obj.alert_unifi['_id'])
-            elif device[0]['state'] != 1:
+                if alert_obj.alert_unifi is not None:
+                    self._archive_alert(c, alert_obj.alert_unifi['_id'])
+            elif device['state'] != 1:
                 devices_unifi = c.get_aps()
                 
                 # add all down devices to the ticket
@@ -599,7 +672,7 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                 for device_unifi in devices_unifi:
                     if device_unifi['state'] == 1:
                         anything_up = True
-                    elif device_unifi['state'] != 1:
+                    elif device_unifi['state'] != 1 and device_unifi.get('serial') is not None:
                         # Add device to alert
                         device_db = self.app.session.query( Devices ).filter_by( serial=device_unifi['serial'] ).first()
                         alert_obj.devices.extend ([device_db])
@@ -607,22 +680,28 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                 gateway_unifi = None
                 gateway_db = None
                 gateway_down = False
-                if device[0]['type'] == "gw":
+                if device['type'] == "gw":
                     self.app.log.debug("[UniFi plugin] This device is the gateway")
                     gateway_unifi = device[0]
                     gateway_down = True
                 else:
                     # Find Gateway
                     gateway_unifi = self.find_gateway(devices_unifi)
-                    if gateway_unifi['state'] == 0:
-                        self.app.log.debug("[UniFi plugin] Gateway is also down")
-                        # Move Gateway to the first device
-                        device_db = self.app.session.query( Devices ).filter_by( serial=device_unifi['serial'] ).first()
-                        index_of_gateway = alert_obj.devices.index(device_db)
-                        gateway_db = alert_obj.devices.pop(index_of_gateway)
-                        alert_obj.devices.insert(0, gateway_db)
-                        gateway_down = True
-                # TODO If gateway is not down, move top level uplink to device 0
+                    if gateway_unifi is not None:
+                        if gateway_unifi['state'] == 0:
+                            self.app.log.debug("[UniFi plugin] Gateway is also down")
+                            # Move Gateway to the first device
+                            device_db = self.app.session.query( Devices ).filter_by( serial=gateway_unifi['serial'] ).first()
+                            if device_db is None:
+                                device_handles = self.app.handler.get('db_interface', 'db_alerts', setup=True)
+                                device_handles.update_db(device, alert_obj.site_name, alert_obj.controller)
+                                device_db = self.app.session.query( Devices ).filter_by( serial=gateway_unifi['serial'] ).first()
+
+                            index_of_gateway = alert_obj.devices.index(device_db)
+                            gateway_db = alert_obj.devices.pop(index_of_gateway)
+                            alert_obj.devices.insert(0, gateway_db)
+                            gateway_down = True
+                
 
                 # Check if this device is a Gateway
                 if gateway_down:
@@ -631,13 +710,15 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                     self.app.log.debug("[UniFi plugin] Device is still off line. Creating ticket")
                     db_alerts = self.app.handler.get('db_interface', 'db_alerts', setup=True)
                     db_alerts.add(alert_obj, "UniFi")
-                    self._archive_alert(c, alert_obj.alert_unifi['_id'])
+                    if alert_obj.alert_unifi is not None:
+                        self._archive_alert(c, alert_obj.alert_unifi['_id'])
 
                     # TODO One possible fix is to power cycle the switch port if the devices is on a POE switch and powered by that switch.
                     # TODO Most of these are solved by sending a set inform. Need to work on that.
         else:
             self.app.log.debug("[UniFi plugin] the device is not in the controller, it's probably because the device has been removed")
-            self._archive_alert(c, alert_obj.alert_unifi['_id'])
+            if alert_obj.alert_unifi is not None:
+                self._archive_alert(c, alert_obj.alert_unifi['_id'])
 
     def alert_wan_transition(self, alert_obj):
         self.app.log.debug("[UniFi plugin] " + alert_obj.company_db.name + " - " + alert_obj.alert_type.name)
@@ -765,6 +846,25 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
         self.app.log.info("[UniFi plugin] We are ignoring these threats right now.")
         self.app.log.info("[UniFi plugin] " + alert_obj.alert_unifi['msg'])
 
+    def alert_poe_overload(self,alert_obj):
+        # TODO alert has the port that is overloaded. Might be useful to add that to the ticket.
+
+        self.app.log.debug("[UniFi plugin] " + alert_obj.company_db.name + " - " + alert_obj.alert_type.name)
+        c = alert_obj.connection
+        alert_date = dateutil.parser.isoparse(alert_obj.alert_unifi['datetime'])
+
+        if alert_date.strftime("%Y-%m-%d") == datetime.today().strftime("%Y-%m-%d"):
+            if alert_obj.devices:
+                db_alerts = self.app.handler.get('db_interface', 'db_alerts', setup=True)
+                db_alerts.add(alert_obj, "UniFi")
+                self._archive_alert(c, alert_obj.alert_unifi['_id'])
+            else:
+                self.app.log.error("EVT_SW_PoeOverload - no device was returned")
+                self.app.log.error(alert_obj.alert_unifi)
+                sys.exit()
+        else:
+            self._archive_alert(c, alert_obj.alert_unifi['_id'])
+
     def alert_unknown_alert(self, alert_obj):
         self.app.log.debug("[UniFi plugin] " + alert_obj.company_db.name + " - " + alert_obj.alert_type.name)
         c = alert_obj.connection
@@ -790,6 +890,8 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             # Switches
             elif alert_obj.alert_type.name == "Stp Port Blocking":
                 self.alert_stp_port_blocking(alert_obj)
+            elif alert_obj.alert_type.name == "Poe Overload":
+                self.alert_poe_overload(alert_obj)
             # APs
             elif alert_obj.alert_type.name == "Rogue AP":
                 self.alert_detect_rouge_ap(alert_obj)
@@ -812,12 +914,14 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             sys.exit()
 
     def verify_contract(self, site_db):
+        # TODO Need to check parent for a contract
         # TODO We should create a contract database outside of autotask that just has basic information
 
         # TODO Can move to using Contract Category's Code below was written when there was a mapping issue with Contract Categories
 
         from  ..autotask_plugin.models.database import Autotask_Contracts, Autotask_Companies, Autotask_Contract_Category
         autotask_company_db = self.app.session.query( Autotask_Companies ).filter_by( company_key=site_db.parent_id  ).first()
+
         contracts_db = self.app.session.query( Autotask_Contracts ).filter_by( autotask_company_key=autotask_company_db.primary_key ).all()
         convered = False
         # Move to Contract_category values
@@ -885,8 +989,6 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
         if company_db:
             self.app.log.info("[UniFi plugin] Syning alerts for " + company_db.name + " Site: " + site_unifi['desc'] + " ID: " + site_unifi['name'])
 
-            self.verify_contract(unifi_site_db)
-
             first_wan_transition = True
             alerts = c.get_alerts_unarchived()
             for alert in alerts:
@@ -896,7 +998,14 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                     if alert['key'] != 'EVT_IPS_IpsAlert':
                         if unifi_site_db.parent_id:
                             alert_unifi_obj = self.create_alert_unifi_object(alert, company_db, unifi_site_db)
-                            self.process_alert(alert_unifi_obj)
+                            # Setting up a timeout
+                            p = multiprocessing.Process(target=self.process_alert(alert_unifi_obj))
+                            p.start()
+                            p.join(timeout=30)
+                            if p.is_alive():
+                                 p.terminate()
+                                 self.app.log.warn("[UniFi plugin] Function was taking too long. Terminating")
+                            #self.process_alert(alert_unifi_obj)
                             if alert['key'] == 'EVT_GW_WANTransition':
                                 first_wan_transition = False
         else:
@@ -965,11 +1074,22 @@ class UniFiAPI(UniFiHandler):
     def site_health(self, controller_name, site_id):
         controller = self.app.session.query(UniFi_Controllers).filter_by(name=controller_name).first()
         c = UniFiControllerHandler.controller_api_object(self, controller)
+        # TODO pull site from the database
         for site in c.get_sites():
             if site['name'] == site_id:
                 health = c.get_healthinfo()
                 self.app.log.info("[UniFi plugin] " + str(health))
-                break        
+                break
+
+    def pull_device_by_mac(self, mac, controller_name, site_id):
+        controller = self.app.session.query(UniFi_Controllers).filter_by(name=controller_name).first()
+        c = UniFiControllerHandler.controller_api_object(self, controller)
+        for site in c.get_sites():
+            if site['name'] == site_id:
+                c.site_id = site["name"]
+                device = self.alert.check_get_device_stat(c, mac)
+                self.app.log.info("[UniFi plugin] " + str(device))
+                break
 
 def full_run(app):
     unifi = app.handler.get('unifi_interface', 'unifi_api', setup=True)

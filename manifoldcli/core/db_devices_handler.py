@@ -67,7 +67,7 @@ class DBDevicesHandler(DBInterface, Handler):
             changed = True
 
         if changed:
-            self.app.log.debug("Updating device in DB: [Device: " + device_obj.name + " Source: " + source + "]")
+            self.app.log.debug("[Core] Updating Device: " + device_obj.name + " Source: " + source )
             self.app.session.commit()
             self.run_hook(device_db, source)
 

@@ -40,29 +40,30 @@ class DBAlertsHandler(DBInterface, Handler):
 
     def add(self, alert_obj, source):
         # TODO Look up the device in Autotask and and see if this alert is in the UDF: "UniFi Alerts Ignore List"
-        self.app.log.debug("Alert: " + str(alert_obj.alert_type))
+        self.app.log.debug("[Core] Alert: " + str(alert_obj.alert_type.name))
         # TODO: Check alerts being added. More alerts are being added that are connecting to tickets. Need to check what is happening.
         exist_alert = self.app.session.query( Alerts ).filter_by( alert_type_key=alert_obj.alert_type.primary_key, company_key=alert_obj.company_db.primary_key).first()
         changed_alert = False
         new_alert = False
         if exist_alert:
-            self.app.log.debug("Alert exsit")
-            if exist_alert.devices[0] and alert_obj.devices[0]:
+            self.app.log.debug("[Core] Alert exsit")
+            if exist_alert.devices and alert_obj.devices:
                 if exist_alert.devices[0] == alert_obj.devices[0]:
                     if exist_alert.last_timestamp == alert_obj.last_timestamp:
                         self.app.log.debug("[Core] Same alert")
                     else:
-                        self.app.log.debug("Different last_timestampt. updating alert")
-                        db = exist_alert
-                        last_timestamp_og = parser.parse(db.last_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
-                        last_timestamp_new = parser.parse(alert_obj.last_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+                        if alert_obj.last_timestamp is not None:
+                            self.app.log.debug("[Core] Different last_timestampt. updating alert")
+                            db = exist_alert
+                            last_timestamp_og = parser.parse(db.last_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+                            last_timestamp_new = parser.parse(alert_obj.last_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
 
-                        if last_timestamp_og < last_timestamp_new:
-                            db.last_timestamp = alert_obj.last_timestamp
-                            self.app.session.commit()
-                            changed_alert = True
-                        else:
-                            self.app.log.debug("Timestamp suggest it's an earilyer alert. Ignoring")
+                            if last_timestamp_og < last_timestamp_new:
+                                db.last_timestamp = alert_obj.last_timestamp
+                                self.app.session.commit()
+                                changed_alert = True
+                            else:
+                                self.app.log.debug("[Core] Timestamp suggest it's an earilyer alert. Ignoring")
                 else:
                     new_alert = True
         else:
