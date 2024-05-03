@@ -46,7 +46,7 @@ class DBAlertsHandler(DBInterface, Handler):
         changed_alert = False
         new_alert = False
         if exist_alert:
-            self.app.log.debug("[Core] Alert exsit")
+            self.app.log.debug("[Core] Alert exist")
             if exist_alert.devices and alert_obj.devices:
                 if exist_alert.devices[0] == alert_obj.devices[0]:
                     if exist_alert.last_timestamp == alert_obj.last_timestamp:
@@ -55,15 +55,18 @@ class DBAlertsHandler(DBInterface, Handler):
                         if alert_obj.last_timestamp is not None:
                             self.app.log.debug("[Core] Different last_timestampt. updating alert")
                             db = exist_alert
-                            last_timestamp_og = parser.parse(db.last_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
-                            last_timestamp_new = parser.parse(alert_obj.last_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
-
-                            if last_timestamp_og < last_timestamp_new:
+                            if db.last_timestamp:
+                                last_timestamp_og = parser.parse(db.last_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+                                last_timestamp_new = parser.parse(alert_obj.last_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+                                if last_timestamp_og < last_timestamp_new:
+                                    db.last_timestamp = alert_obj.last_timestamp
+                                else:
+                                    self.app.log.debug("[Core] Timestamp suggest it's an earilyer alert. Ignoring")
+                            else: 
                                 db.last_timestamp = alert_obj.last_timestamp
-                                self.app.session.commit()
-                                changed_alert = True
-                            else:
-                                self.app.log.debug("[Core] Timestamp suggest it's an earilyer alert. Ignoring")
+                            self.app.session.commit()
+                            changed_alert = True
+
                 else:
                     new_alert = True
         else:
@@ -71,6 +74,7 @@ class DBAlertsHandler(DBInterface, Handler):
 
         if new_alert:
             self.app.log.debug("[Core] Adding Alert Object to the DB")
+
             try:
                 db = Alerts(
                     alert_type = alert_obj.alert_type,
@@ -82,13 +86,12 @@ class DBAlertsHandler(DBInterface, Handler):
                     title_append = alert_obj.title_append,
                     useful_information = alert_obj.useful_information
                 )
+                self.app.session.add(db)
+                self.app.session.commit()
             except (AttributeError, TypeError) as e:
                 self.app.log.error(f"[Core] An SQLAlchemy error occurred: {e}")
                 self.app.log.error("[Core] Object: " + alert_obj.to_str())
                 sys.exit()
-
-            self.app.session.add(db)
-            self.app.session.commit()
 
         if new_alert or changed_alert:
             self.app.last_alert = db

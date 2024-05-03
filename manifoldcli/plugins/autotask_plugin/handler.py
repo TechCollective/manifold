@@ -681,7 +681,7 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
 
     def check_issuetypes(self, at, tenant):
         last_sync = self.app.session.query(Autotask_Cache_Last_Sync).filter_by(name="_autotask_issues").first().last_sync
-        self.app.log.debug("[Autotask plugin]Checking last sync of issues")
+        self.app.log.debug("[Autotask plugin] Checking last sync of issues")
         if last_sync:
             self.app.log.debug("[Autotask plugin] last_sync has a value")
             if last_sync < datetime.datetime.now() - datetime.timedelta(days=7):
@@ -731,7 +731,9 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
             if alert.alert_type.name == "No Contract":
                 subissue_db = self.app.session.query(Autotask_Subissues).filter_by(label="Upsell").first()
             else:
-                subissue_db = self.app.session.query(Autotask_Subissues).filter_by(label=alert.alert_type.name, parent_value=issue_db.value).first()
+                subissue_db = self.app.session.query(Autotask_Subissues)\
+                    .filter(Autotask_Subissues.label.ilike(alert.alert_type.name))\
+                    .filter(Autotask_Subissues.parent_value == issue_db.value).first()
             if subissue_db == None:
                 self.app.log.debug("[Autotask plugin] TODO: Subissue doesn't exsit. Need to create it. Subissue Type: " + alert.alert_type.name)
                 sys.exit()
@@ -1009,3 +1011,5 @@ def full_run(app):
                 app.log.error("[Autotask plugin] " + str(e))
             tenant.last_full_sync = datetime.datetime.now()
             app.session.commit()
+        else:
+            app.log.info("[Autotask plugin] Tenant: " + tenant.name + " - Last run was done within 24 hours. Skipping")

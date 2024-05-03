@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db_base import *
 from .sources import Sources
@@ -23,6 +23,7 @@ class Alerts(DBBase):
     devices = relationship("Devices", secondary=device_alert_association, back_populates="alerts")
     company_key = Column(Integer, ForeignKey('companies.primary_key'), nullable=False)
     company = relationship("Companies", uselist=False)
+    cleared = Column(Boolean, default=False)
 
 
 
