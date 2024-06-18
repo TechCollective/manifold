@@ -11,9 +11,13 @@ import json
 import pytz
 from datetime import datetime, timedelta
 import dateutil.parser
+# TODO Consider replacing multiprocessing with threading
 import multiprocessing
+import threading
 import time
 import re
+
+# TODO If there is a Unifi SmartPower device and a port is drawing power, but is not labels, create an alert
 
 class UniFiControllerHandler(UniFiControllerInterface, Handler):
     class Meta:
@@ -190,18 +194,17 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
                 if len(site_id) == 8:
                     # Only the 8 digit site id. We are assuming it's the first Controller
                     site_db = self.app.session.query(UniFi_Sites).filter_by(name=site_id, controller_key='1').first()
-                    if site_db:
-                        site_db.parent_id = company_key
-                        self.app.session.commit()
-                    else:
-                        # TODO check last sync and sync unifi sites if it's after sync time.
-                        self.app.log.warning("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
                 elif len(site_id) == 0:
                     pass
                 else:
                     site_db = self.get_host_and_port_from_autotask_udf(site_id)
+
+                if site_db:
                     site_db.parent_id = company_key
                     self.app.session.commit()
+                else:
+                    # TODO check last sync and sync unifi sites if it's after sync time.
+                    self.app.log.warning("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
         else:
             site_id = site_ids
             if len(site_id) == 8:
@@ -278,7 +281,7 @@ class UniFiDeviceHandler(UniFiDeviceInterface, Handler):
                     # Not sure I want to do anything with devices not adapted. Just tagging this in case I do
                     pass
         else:
-            self.app.log.warning("[UniFi plugin] Site: " + unifi_site_db.desc + "is not assoicated with a company. Skipping.")
+            self.app.log.warning("[UniFi plugin] Site: " + unifi_site_db.desc + " is not assoicated with a company. Skipping.")
 
     def _create_device_object(self,device):
         if device['name'] == None:
@@ -560,6 +563,8 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             alert_type_name = "Stp Port Blocking"
         elif unifi_alert['key'] == 'EVT_SW_PoeOverload':
             alert_type_name = "Poe Overload"
+        # elif unifi_alert['key'] == 'EVT_AP_FirmwareDownloadFailed':
+        #     alert_type_name = "Upgrade Issue"
         # elif unifi_alert['key'] == 'EVT_SW_RestartedUnknown':
         #     # TODO Check other tickets and add notes about this if they are. Do not create a ticket based on this alert alone.
         #     self.app.log.error("[UniFi plugin] Event is Restart Unknown")
@@ -878,6 +883,25 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
         else:
             self._archive_alert(c, alert_obj.alert_unifi['_id'])
 
+    def alert_firmware_download_failed(self, alert_obj):
+        self.app.log.debug("[UniFi plugin] " + alert_obj.company_db.name + " - " + alert_obj.alert_type.name)
+        c = alert_obj.connection
+        alert_date = dateutil.parser.isoparse(alert_obj.alert_unifi['datetime'])
+        alert_obj.useful_information += "\n\n"
+        alert_obj.useful_information += "Alert Message: " + str(alert_obj.alert_unifi('msg'))
+
+        if alert_date.strftime("%Y-%m-%d") == datetime.today().strftime("%Y-%m-%d"):
+            if alert_obj.devices:
+                db_alerts = self.app.handler.get('db_interface', 'db_alerts', setup=True)
+                db_alerts.add(alert_obj, "UniFi")
+                self._archive_alert(c, alert_obj.alert_unifi['_id'])
+            else:
+                self.app.log.error("FirmwareDownloadFailed - no device was returned")
+                self.app.log.error(alert_obj.alert_unifi)
+                sys.exit()
+        else:
+            self._archive_alert(c, alert_obj.alert_unifi['_id']) 
+
     def alert_unknown_alert(self, alert_obj):
         self.app.log.debug("[UniFi plugin] " + alert_obj.company_db.name + " - " + alert_obj.alert_type.name)
         c = alert_obj.connection
@@ -928,6 +952,10 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             # IPS
             elif alert_obj.alert_type.name == "IPS":
                 self.alert_ips(alert_obj)
+            # Other
+            # elif alert_obj.alert_type.name == "FirmwareDownloadFailed":
+            #     self.alert_firmware_download_failed(alert_obj)
+            # IPSUpdateError
             else:
                 self.alert_unknown_alert(alert_obj)
         else:
@@ -994,63 +1022,71 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             # TODO Create ticket for the site
             # Need an ignore list
 
-    def verify_old_alerts(self, unifi_site_db):
-        company_db = self.app.session.query( Companies ).filter_by( primary_key=unifi_site_db.parent_id  ).first()
-        self.app.log.info("[UniFi plugin] Verifing old alerts for " + company_db.name + " Site: " + unifi_site_db.desc + " ID: " + unifi_site_db.name)
-        source_db = self.app.session.query( Sources ).filter_by( plugin_name="UniFi", tenant_key=unifi_site_db.controller_key ).first()
-        if source_db is None:
-            self.app.log.error("[UniFi plugin] Cannot fine source for alert!")
-        alerts_db = self.app.session.query( Alerts ).filter_by( source_key=source_db.primary_key, company_key=unifi_site_db.parent_id ).all()
-        devices_unifi = []
-        for alert in alerts_db:
-            if alert.alert_type.name == "Lost Contact" or alert.alert_type.name == "Internet Outage":
-                devices_back_online = 0
-                associated_devices = self.app.session.query(Devices).\
-                    join(device_alert_association, device_alert_association.c.device_key == Devices.primary_key).\
-                    join(Alerts, device_alert_association.c.alert_key == Alerts.primary_key).\
-                    filter(Alerts.primary_key == alert.primary_key).all()
+    def verify_old_alerts_by_site(self, unifi_site_db):
+        db_alerts = self.app.handler.get('db_interface', 'db_alerts', setup=True)
+        if unifi_site_db.parent_id:
+            company_db = self.app.session.query( Companies ).filter_by( primary_key=unifi_site_db.parent_id  ).first()
+            self.app.log.info("[UniFi plugin] Verifing past alerts for " + company_db.name + " Site: " + unifi_site_db.desc + " ID: " + unifi_site_db.name)
+            source_db = self.app.session.query( Sources ).filter_by( plugin_name="UniFi", tenant_key=unifi_site_db.controller_key ).first()
+            if source_db is None:
+                self.app.log.error("[UniFi plugin] Cannot fine source for alert!")
+            alerts_db = self.app.session.query( Alerts ).filter_by( source_key=source_db.primary_key, company_key=unifi_site_db.parent_id ).all()
+            devices_unifi = []
+            for alert in alerts_db:
+                #self.app.log.info("[UniFi plugin] Alert for " + company_db.name + " Alert Key: " +str(alert.primary_key))
+                # Lost Contact and Internet Outage
+                if alert.alert_type.name == "Lost Contact" or alert.alert_type.name == "Internet Outage":
+                    devices_back_online = 0
+                    associated_devices = db_alerts.get_associated_devices(alert)
+                    for device in associated_devices:
+                        controller_db = self.app.session.query(UniFi_Controllers).filter_by(primary_key=source_db.tenant_key).first()
+                        c = UniFiControllerHandler.controller_api_object(self, controller_db, unifi_site_db.name)
+                        
+                        try:
+                            device_unifi = self.check_get_device_stat(c, device.serial)[0]
+                        except IndexError as e:
+
+                            self.app.log.error("[UniFi plugin] Device is not found in the controller, removing the assoicated device from the alert")
+                            associated_device = self.app.session.query(device_alert_association).filter_by(device_key=device.primary_key, alert_key=alert.primary_key).delete(synchronize_session=False)
+                            self.app.session.commit()
+                            # TODO, Maybe remove the device from the DB and send out an hook about it so Autotask can disable the CI
+                            device_unifi = None
+
+                        if device_unifi:
+                            devices_unifi.append(device_unifi)
+                            if device_unifi['state'] != 0:
+                                devices_back_online += 1
+                                db_alerts.clear_device(device)
+                    if devices_back_online > 0:
+                        if devices_back_online == len(devices_unifi):
+                            self.app.log.info("[UniFi plugin] All devices are back online. Clearing alert.")
+                            db_alerts.clear(alert)
+                        else:
+                            self.app.log.debug("[UniFi plugin] At least one fo the devices are back online. Need to update alert.")
+                            for res in self.app.hook.run('alert_device_cleared', self.app):
+                                pass
+                            # db_alerts.update(alert)
+                else:
+                    self.app.log.info("[UniFi plugin] Alert type: " + alert.alert_type.name)
+
+    def verify_old_alerts(self):
+        controllers = self.app.session.query(UniFi_Controllers).all()
+
+        for controller in controllers:
+            self.app.log.info("[UniFi plugin] Verify past Alerts for Controller: " + controller.name)
+            c = UniFiControllerHandler.controller_api_object(self, controller)
+            sites = c.get_sites()
+            for site in sites:
+                unifi_site_db = self.app.session.query( UniFi_Sites ).filter_by( name=site['name'], controller_key=controller.primary_key  ).first()
+                unifi = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
+                #unifi.run_with_timeout(30, 60, self.verify_old_alerts_by_site, args=(unifi_site_db,))
+                self.verify_old_alerts_by_site(unifi_site_db)
                 
-                for device in associated_devices:
-                    controller_db = self.app.session.query(UniFi_Controllers).filter_by(primary_key=source_db.tenant_key).first()
-                    c = UniFiControllerHandler.controller_api_object(self, controller_db, unifi_site_db.name)
-                    device_unifi = self.check_get_device_stat(c, device.serial)[0]
-                    devices_unifi.append(device_unifi)
-                    if device_unifi['state'] != 0:
-                        devices_back_online += 1
-                if devices_back_online > 0:
-                    if devices_back_online == len(devices_unifi):
-                        alert.cleared = True
-                        self.app.session.commit()
-                        # TODO Create and call Hook for cleared alerts | Maybe add a Autotask check for cleared alerts that is part of full run
-                        # TODO Delete alert and assoicated data
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                        self.app.log.error("[UniFi plugin] All devices are back online. Close ticket.")
-                    else:
-                        self.app.log.error("[UniFi plugin] At least one fo the devices are back online. Need to update ticket.")
-                    sys.exit()
-            else:
-                sys.exit(alert.alert_type.name)
 
     def sync_site(self, controller, site_unifi):
+        # TODO We should replace all this code wiht a "creaet_site_object" function and add the device_unifi = self.get_unifi_device_from_alert(c, unifi_alert) to it.
+        #   Currently we are pulling all devices for every alert, when we could just to it once when we create the site object.
+
         c = UniFiControllerHandler.controller_api_object(self, controller, site_unifi['name'])
 
         unifi_site_db = self.app.session.query( UniFi_Sites ).filter_by( name=site_unifi['name'], controller_key=controller.primary_key  ).first()
@@ -1064,7 +1100,7 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             company_db = self.app.session.query( Companies ).filter_by( primary_key=unifi_site_db.parent_id  ).first()
 
         if company_db:
-            # self.verify_old_alerts(unifi_site_db)
+            # self.verify_old_alerts_by_site(unifi_site_db)
 
             self.app.log.info("[UniFi plugin] Syning alerts for " + company_db.name + " Site: " + site_unifi['desc'] + " ID: " + site_unifi['name'])
 
@@ -1077,16 +1113,19 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                     if alert['key'] != 'EVT_IPS_IpsAlert':
                         if unifi_site_db.parent_id:
                             alert_unifi_obj = self.create_alert_unifi_object(alert, company_db, unifi_site_db)
-                            # Setting up a timeout
-                            p = multiprocessing.Process(target=self.process_alert(alert_unifi_obj))
-                            p.start()
-                            p.join(timeout=30)
-                            if p.is_alive():
-                                 p.terminate()
-                                 self.app.log.warn("[UniFi plugin] Function was taking too long. Terminating")
-                            #self.process_alert(alert_unifi_obj)
-                            if alert['key'] == 'EVT_GW_WANTransition':
-                                first_wan_transition = False
+                            if alert_unifi_obj.device_unifi == None:
+                                # TODO If the device is missing, create a function to remove the device
+                                self._archive_alert(c, alert['_id'])
+                            else:
+                                # Setting up a timeout
+                                p = multiprocessing.Process(target=self.process_alert(alert_unifi_obj))
+                                p.start()
+                                p.join(timeout=30)
+                                if p.is_alive():
+                                    p.terminate()
+                                    self.app.log.warn("[UniFi plugin] Function was taking too long. Terminating")
+                                if alert['key'] == 'EVT_GW_WANTransition':
+                                    first_wan_transition = False
         else:
             self.app.log.warning("[UniFi plugin] Site is not assoicated with a company. " + site_unifi['desc'] + " " + site_unifi['name'])
             self.app.log.warning("[UniFi plugin] Full Site path: https://" +  controller.host + ":" + str(controller.port) + "/manage/" + str(unifi_site_db.name) +"/")
@@ -1170,6 +1209,25 @@ class UniFiAPI(UniFiHandler):
                 self.app.log.info("[UniFi plugin] " + str(device))
                 break
 
+    def run_with_timeout(self, timeout, pause_time, func, args=()):
+        def wrapper():
+            try:
+                func( *args )
+            except Exception as e:
+                self.app.log.error(f"[UniFi plugin] Error running function: {e}")
+        while True:
+            thread = threading.Thread(target=wrapper)
+            thread.start()
+            thread.join(timeout)  # Wait for the specified timeout
+
+            if thread.is_alive():
+                self.app.log.debug(f"[UniFi plugin] Function took too long. Pausing for {pause_time} seconds before retrying.")
+                thread.join()  # Ensure the thread is terminated before pausing
+                time.sleep(pause_time)
+            else:
+                break  # Function completed successfully within the timeout
+
+
 def full_run(app):
     unifi = app.handler.get('unifi_interface', 'unifi_api', setup=True)
     controllers = app.session.query(UniFi_Controllers).all()
@@ -1202,6 +1260,12 @@ def full_run(app):
                 unifi.alert.sync_controller(controller.name)
             except Exception as e:
                 app.log.error("[UniFi plugin] Alert Sync Controller Error:" + str(e))
+
+            app.log.info("[UniFi plugin] Clear old alerts")
+            try:
+                unifi.alert.verify_old_alerts()
+            except Exception as e:
+                app.log.error("[UniFi plugin] Clear old alerts Error:" + str(e))
 
             controller.last_full_sync = datetime.now()
             app.session.commit()

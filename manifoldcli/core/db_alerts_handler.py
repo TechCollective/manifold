@@ -1,6 +1,7 @@
 from cement import Handler
 from .db_interface import *
 from ..models.database.alerts import *
+from ..models.database.devices import *
 import sys
 import datetime
 from dateutil import parser
@@ -101,8 +102,35 @@ class DBAlertsHandler(DBInterface, Handler):
     def delete(self, obj):
         pass
 
-    def update(self, obj, db, source):
-        pass
+    def update(self, alert_db):
+        self.app.log.error("[Core] Placeholder for update alerts")
+        
+        # TODO update ticket with devices that cleared.
+        # TODO Delete alert and assoicated data
+
+
+    def get_associated_devices(self, alert_db):
+        associated_devices = self.app.session.query(Devices).\
+            join(device_alert_association, device_alert_association.c.device_key == Devices.primary_key).\
+            join(Alerts, device_alert_association.c.alert_key == Alerts.primary_key).\
+            filter(Alerts.primary_key == alert_db.primary_key).all()
+        return associated_devices
+
+    def clear_device(self, device_db):
+        device_db.cleared = True
+        self.app.session.commit()
+
+    def clear(self, alert_db):
+        alert_db.cleared = True
+        self.app.session.commit()
+        self.app.log.debug("[Core] Alert Cleared. Running Alert Cleared hooks")
+
+        for res in self.app.hook.run('alert_cleared', self.app):
+            pass
+
+        associated_devices = self.app.session.query(device_alert_association).filter_by(alert_key=alert_db.primary_key).delete(synchronize_session='fetch')
+        self.app.session.delete(alert_db)
+        self.app.session.commit()
 
     # TODO put this in a hook when the app closes
     #def close_session(self):

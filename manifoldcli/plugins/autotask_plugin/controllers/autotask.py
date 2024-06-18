@@ -146,3 +146,30 @@ class Autotask(Controller):
     def sync_all_contracts(self):
         autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
         autotask.contract.sync_all()
+    
+    @ex(
+        help="Pull ticket information by ticket number from an Autotask Tenant",
+        arguments=[
+            (['--ticket_number'], {
+                'help': "ticket number of the ticket you wish to pull",
+                'required': True,
+                'dest': 'ticket_number'
+                
+            }),
+            (['--tenant-name'], {
+                'help': "Tenant name",
+                'required': True,
+                'dest': 'tenant_name'
+                
+            })]
+    )
+    def pull_ticket(self):
+        autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
+        autotask.ticket.pull_by_number(self.app.pargs.ticket_number, self.app.pargs.tenant_name)
+    
+    @ex(
+        help="If the ticket is closed in the Autotask Tenant, delete reocrd in manifold's database",
+    )
+    def check_all_stagnant_ticket(self):
+        autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
+        autotask.ticket.check_all_stagnant()

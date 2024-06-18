@@ -222,3 +222,10 @@ class UniFi(Controller):
     def pull_device(self):
         unifi = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
         unifi.pull_device_by_mac(self.app.pargs.mac, self.app.pargs.controller_name, self.app.pargs.site_id)
+
+    @ex(
+        help='Clear old alerts',
+    )
+    def clear_old_alerts(self):
+        unifi = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
+        unifi.alert.verify_old_alerts()

@@ -146,23 +146,18 @@ class AutotaskCompanyHandler(AutotaskCompanyInterface, Handler):
             company_db = None
             existing_companies = self.app.session.query( Companies ).filter_by( name=company['companyName'] ).all()
             for existing_company in existing_companies:
-                test = self.app.session.query(Autotask_Companies).filter_by( company_key=existing_company.primary_key ).first()
-                print(test.primary_key)
-                if test != None:
-                    
-                    self.app.log.error("[Autotask plugin] Company: " + existing_company.name + " exist. Not sure how to move forward. exiting")
-                    sys.exit()
-                else:
-                    company_db=existing_company
+                autotask_company_db = self.app.session.query(Autotask_Companies).filter_by( company_key=existing_company.primary_key ).first()
+                company_db=existing_company
 
             if company_db is None:
                 company_db = db_companies.add(company_obj, "autotask")
 
-            autotask_company_db = Autotask_Companies(
-                autotask_company_id = company['id'],
-                autotask_tenant_key = tenant.primary_key,
-                parent = company_db
-            )
+            if not autotask_company_db:
+                autotask_company_db = Autotask_Companies(
+                    autotask_company_id = company['id'],
+                    autotask_tenant_key = tenant.primary_key,
+                    parent = company_db
+                )
             self.update_unifi(company, autotask_company_db=autotask_company_db)
 
             self.app.log.debug("[Autotask plugin] Adding company to DB:  [Company: " + company['companyName'] + " Company ID: " + str(company['id']) + "]")
@@ -694,6 +689,7 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
     def add_ticket_db(self, alert, ticket_id, tenant):
         at = AutotaskTenantHandler.tenant_api_object(self, tenant)
         autotask_ticket = at.get_ticket_by_id(ticket_id['itemId'])[0]
+        # TODO add Ticket ID to database
 
         db = Autotask_Tickets(
             ticket_number = autotask_ticket['ticketNumber'],
@@ -735,8 +731,7 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
                     .filter(Autotask_Subissues.label.ilike(alert.alert_type.name))\
                     .filter(Autotask_Subissues.parent_value == issue_db.value).first()
             if subissue_db == None:
-                self.app.log.debug("[Autotask plugin] TODO: Subissue doesn't exsit. Need to create it. Subissue Type: " + alert.alert_type.name)
-                sys.exit()
+                self.app.log.error("[Autotask plugin] TODO: Subissue doesn't exsit. Need to create it. Subissue Type: " + alert.alert_type.name)
         not_complete_filter = at.create_filter("noteq", "status", "5") # Not Complete
         subissue_filter = at.create_filter("eq", "subIssueType", str(subissue_db.value))
         company_filter = at.create_filter("eq", "companyID", at_company.autotask_company_id)
@@ -823,8 +818,169 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
             else:
                 self.app.log.error("[Autotask] Ticket is already assoicated with a ticket in Autotask. Need a process to fix this.")
 
-    def update(self, tenant, company, ticket_no, note, status):
-        pass
+    def update(self, ticket_db, note=None, status=None):
+        #tenant = 
+        #at = AutotaskTenantHandler.tenant_api_object(self, tenant)
+
+        if note:
+            params = {
+                #"createDateTime": "2024-05-08T16:08:53.556Z",
+                #"createdByContactID": 0,
+                #"creatorResourceID": 0,
+                "description": note,
+                "noteType": 0, # TODO need to look up Note Types
+                "publish": 0, # TODO need to look up value publish. I bet 1 = True
+                "ticketID": 0, # TODO Grab Ticket ID from alert_db
+                "title": "Some devices have cleared this alert",
+            }
+
+            # note_return = at._api_update("TicketsNotes", params)
+
+        if status == "Complete":
+            params = {
+                'id': 0,# TODO Grab Ticket ID from alert_db
+                'status': "5", # Complete TODO use a varible that is looked up for "Complete".
+            }
+            #ticket_return = at._api_update("Tickets", params)
+
+    def _close_ticket(self, ticket_db, ticket_at):
+        tenant = self.app.session.query( Autotask_Tenants ).filter_by( primary_key=ticket_db.autotask_tenant_key ).first()
+        at = AutotaskTenantHandler.tenant_api_object(self, tenant)
+        params = {
+            "description": "The Unifi alert that created this ticket cleared.",
+            "noteType": 1, # TODO need to look up Note Types
+            "publish": 1, # TODO need to look up value publish. I bet 1 = True
+            "ticketID": ticket_at['id'], 
+            "title": "Alert Cleared",
+        }
+        note_return = at._api_write("Tickets/" + str(ticket_at['id']) + "/Notes", params)
+
+        filter_fields = {
+            'op':'eq',
+            'field':'ticketID',
+            'value': ticket_at['id']
+        }
+        ticket_times = at.create_query("TimeEntries", str(filter_fields))
+        if ticket_times is None:
+            params = {
+                'id': ticket_at['id'],
+                'status': "5",
+            }
+            at._api_update("Tickets", params)
+
+    def close_ticket(self, alert_db):
+        ticket_db = self.app.session.query( Autotask_Tickets ).filter_by( alert_key=alert_db.primary_key ).first()
+        if ticket_db:
+            self.app.log.error("[Autotask plugin] Closing Ticket: " + ticket_db.ticket_number)
+            source_db = self.app.session.query( Sources ).filter_by( primary_key=alert_db.source_key ).first()
+            tenant = self.app.session.query( Autotask_Tenants ).filter_by( primary_key=source_db.tenant_key ).first()
+            if not tenant:
+                self.app.log.error("[Autotask plugin] Didn't find the tenant!")
+                self.app.log.error("[Autotask plugin] alert: " + str(alert_db.primary_key))
+                self.app.log.error("[Autotask plugin] ticket: " + str(ticket_db))
+                sys.exit()
+            at = AutotaskTenantHandler.tenant_api_object(self, tenant)
+
+            try: 
+                ticket_at = at.get_ticket_by_number(ticket_db.ticket_number)[0]
+            except IndexError as e:
+                self.app.log.error("[Autotask plugin] Ticket is not found in Autotask. Deleting from database")
+                self.app.session.delete(ticket_db)
+                self.app.session.commit()
+                ticket_at = None
+
+            if ticket_at:
+                # TODO Change 5 to a ticket status closed comparison. 5 should not need to be hardcoded here
+                if ticket_at['status'] != 5:
+                    params = {
+                        #"createDateTime": "2024-05-08T16:08:53.556Z",
+                        #"createdByContactID": 0,
+                        #"creatorResourceID": 0,
+                        "description": "The Unifi alert that created this ticket cleared.",
+                        "noteType": 1, # TODO need to look up Note Types
+                        "publish": 1, # TODO need to look up value publish. I bet 1 = True
+                        "ticketID": ticket_at['id'], 
+                        "title": "Alert Cleared",
+                    }
+                    note_return = at._api_write("Tickets/" + str(ticket_at['id']) + "/Notes", params)
+
+                    filter_fields = {
+                        'op':'eq',
+                        'field':'ticketID',
+                        'value': ticket_at['id']
+                    }
+                    ticket_times = at.create_query("TimeEntries", str(filter_fields))
+                    if ticket_times is None:
+                        params = {
+                            'id': ticket_at['id'],
+                            'status': "5",
+                        }
+                        at._api_update("Tickets", params)
+
+                else:
+                    self.app.log.debug("[Autotask plugin] Deleting " + str(ticket_db.ticket_number) + " from database")
+                    self.app.session.delete(ticket_db)
+                    self.app.session.commit()
+        else:
+            self.app.log.error("[Autotask plugin] Something is triggering a close ticket on a ticket that is not in our DB.")
+
+    def clean_db_of_ticket(self,ticket_db):
+        alert_db = self.app.session.query( Alerts ).filter_by( primary_key=ticket_db.alert_key ).first()
+        self.app.session.delete(ticket_db)
+        if alert_db:
+            associated_devices = self.app.session.query(device_alert_association).filter_by(alert_key=alert_db.primary_key).delete(synchronize_session='fetch')
+            self.app.session.delete(alert_db)
+        self.app.session.commit()
+
+    def check_stagnant(self, tenant):
+        # TODO we should only do this once a day, so we need to add a time check
+        self.app.log.info("[Autotask plugin] Clecking for stagnant tickets on " + tenant.name)
+        at = AutotaskTenantHandler.tenant_api_object(self, tenant)
+        tickets_db = self.app.session.query( Autotask_Tickets ).filter_by( autotask_tenant_key=tenant.primary_key ).all()
+        for ticket_db in tickets_db:
+            try: 
+                ticket_at = at.get_ticket_by_number(ticket_db.ticket_number)[0]
+            except IndexError as e:
+                self.app.log.info("[Autotask plugin] Ticket is not found in Autotask. Deleting from database")
+                self.clean_db_of_ticket(ticket_db)
+                ticket_at = None
+
+            # TODO, we should use a status here instead of "5"
+            if ticket_at:
+                if ticket_at['status'] == 5:
+                    self.app.log.info("[Autotask plugin] Ticket number " + ticket_db.ticket_number + " is closed, cleaning up database")
+                    self.clean_db_of_ticket(ticket_db)
+                else:
+                    # Check if the alert assoicated with the ticket is still active.
+                    alert_db = self.app.session.query( Alerts ).filter_by( primary_key = ticket_db.alert_key ).first()
+                    if not alert_db:
+                        self._close_ticket(ticket_db, ticket_at)
+                        self.clean_db_of_ticket(ticket_db)
+
+    def check_all_stagnant(self):
+        autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
+        tenants = autotask.tenant.list()
+        for tenant in tenants:
+            self.check_stagnant(tenant)
+
+    def pull_by_number(self, ticket_number, tenant_name):
+        tenant = self.app.session.query(Autotask_Tenants).filter_by(name=tenant_name).first()
+        at = AutotaskTenantHandler.tenant_api_object(self, tenant)
+
+        ticket_at = at.get_ticket_by_number(ticket_number)[0]
+        self.app.log.info("[Autotask plugin] Ticket information: " + str(ticket_at))
+
+        # filter_fields = {
+        #     'op':'eq',
+        #     'field':'ticketID',
+        #     'value': ticket_at['id']
+        # }
+        # ticket_notes = at.create_query("TicketNotes", str(filter_fields))
+        # for note in ticket_notes:
+        #     self.app.log.info("[Autotask plugin] Ticket Note: " + str(note ))
+        # ticket_times = at.create_query("TimeEntries", str(filter_fields))
+        # for time in ticket_times:
+        #     self.app.log.info("[Autotask plugin] Ticket time: " + str(time))
 
 class AutotaskContractHandler(AutotaskContractInterface, Handler):
     class Meta:
@@ -974,6 +1130,37 @@ class AutotaskAPI(AutotaskInterface, Handler):
 def alert_update_hook( app ):
     autotask = app.handler.get('autotask_interface', 'autotask_api', setup=True)
     autotask.ticket.create(app.last_alert)
+    # TODO Add note about the devices no loner effected by this alert, alert primary tech
+
+def alert_device_cleared_hook( app ):
+    app.log.debug("[Autotask plugin] Clearing device from an alert")
+    sys.exit("Need a function")
+
+def alert_cleared_hook( app ):
+    app.log.debug("[Autotask plugin] Clearing old alert")
+    autotask = app.handler.get('autotask_interface', 'autotask_api', setup=True)
+
+    # Close tickets for cleared alerts
+    alerts_db = app.session.query( Alerts ).filter_by( cleared=1 ).all()
+    for alert_db in alerts_db:
+        autotask.ticket.close_ticket(alert_db)
+
+    # Update tickets for cleared devices
+    associations = app.session.query( device_alert_association ).filter_by( cleared=1 ).all()
+    for association in associations:
+        # TODO group assoications per ticket and add one note, instead of 1 note/deivce state change
+
+        ticket_db = app.session.query( Autotask_Tickets ).filter_by( alert_key=association.alert_key ).first()
+        device_db = app.session.query( Devices ).filter_by( primary_key=association.device_key ).first()
+        note = "Alert for " + device_db.name + " cleared."
+        autotask.ticket.update(ticket_db, note)
+
+def hook_check_alert( app ):
+    ticket_db = app.session.query( Autotask_Tickets ).filter_by( alert_key=app.alert_db.primary_key ).first()
+    if ticket_db:
+        return 1
+    else:
+        return 0
 
 def full_run(app):
     autotask = app.handler.get('autotask_interface', 'autotask_api', setup=True)
@@ -1009,6 +1196,13 @@ def full_run(app):
                 autotask.contract.sync_tenant(tenant)
             except Exception as e:
                 app.log.error("[Autotask plugin] " + str(e))
+
+            app.log.info("[Autotask plugin] Check for stagnant tickets")
+            try:
+                autotask.ticket.check_all_stagnant()
+            except Exception as e:
+                app.log.error("[Autotask plugin] " + str(e))
+
             tenant.last_full_sync = datetime.datetime.now()
             app.session.commit()
         else:

@@ -80,7 +80,11 @@ class Manifold(App):
             'full_run',
             'device_update',
             'company_update',
-            'alert_update'
+            'alert_update',
+            'alert_cleared',
+            'alert_device_cleared_hook',
+            'alert_device_cleared',
+            'hook_check_alert',
         ]
         hooks = [
             ('post_setup', db_extension),

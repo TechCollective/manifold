@@ -3,6 +3,7 @@ from cement import Controller, ex, Interface
 from cement.utils.version import get_version_banner
 from ..core.version import get_version
 from ..core import *
+from ..models.database import *
 from cement.core.plugin import PluginInterface
 import sys
 
@@ -42,22 +43,28 @@ class Base(Controller):
 
     @ex(
         help='Will do a full run of all plugins.',
-        # arguments=[
-        #     (['--name'], {
-        #         'help': "Your name for the controller to add",
-        #         'required': True,
-        #         'dest': 'controller_name'
-                
-        #     })
-        # ]
     )
     def full_run(self):
         """Run everything."""
         for res in self.app.hook.run('full_run', self.app):
             pass
 
-
-
+    @ex(
+        help='Will do a full run of all plugins.',
+    )
+    def cleanup_alerts(self):
+        alerts_db = self.app.session.query( Alerts ).all()
+        for alert_db in alerts_db:
+            if alert_db:
+                self.app.alert_db = alert_db
+                for res in self.app.hook.run('hook_check_alert', self.app):
+                    if not res:
+                        associated_devices = self.app.session.query(device_alert_association).filter_by(alert_key=alert_db.primary_key).delete(synchronize_session='fetch')
+                        self.app.session.delete(alert_db)
+                        self.app.session.commit()
+                delattr(self.app, "alert_db")
+    
+    
     # Hooks
     # company_update
     # site_update
