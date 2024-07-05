@@ -145,6 +145,7 @@ class AutotaskCompanyHandler(AutotaskCompanyInterface, Handler):
             self.update_unifi(company, autotask_company_db=existing_entry)
         else:
             company_db = None
+            autotask_company_db = None
             existing_companies = self.app.session.query( Companies ).filter_by( name=company['companyName'] ).all()
             for existing_company in existing_companies:
                 autotask_company_db = self.app.session.query(Autotask_Companies).filter_by( company_key=existing_company.primary_key ).first()
