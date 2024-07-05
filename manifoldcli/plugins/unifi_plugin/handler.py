@@ -283,11 +283,22 @@ class UniFiDeviceHandler(UniFiDeviceInterface, Handler):
         else:
             self.app.log.warning("[UniFi plugin] Site: " + unifi_site_db.desc + " is not assoicated with a company. Skipping.")
 
-    def _create_device_object(self,device):
+    def _create_device_object(self,device, source):
         if device['name'] == None:
             print("no name")
             print(device)
             sys.exit()
+
+        install_date = None
+        if 'provisioned_at' in device:
+            install_date = datetime.fromtimestamp(device['provisioned_at'])
+        else:
+            if 'last_seen' in device:
+                install_date = datetime.fromtimestamp(device['last_seen'])
+            else:
+                if 'uptime' in device:
+                    install_date = datetime.fromtimestamp(device['uptime'])
+
         # TODO copy mac logic for ip_addresses
         mac_obj = MacAddressObject(
             mac_address=device['mac']
@@ -300,8 +311,10 @@ class UniFiDeviceHandler(UniFiDeviceInterface, Handler):
             name=device['name'],
             manufacturer="Ubiquiti",
             model=device['model'],
+            install_date=install_date,
             serial=device['serial'],
-            mac_address=mac_list_obj
+            mac_address=mac_list_obj,
+            source=source.primary_key,
         )
         if device.get('provisioned_at') is not None:
             device_obj.install_date=datetime.fromtimestamp(device['provisioned_at'])
@@ -309,7 +322,9 @@ class UniFiDeviceHandler(UniFiDeviceInterface, Handler):
 
     def update_db(self, device, site_id, controller):
         db_devices = self.app.handler.get('db_interface', 'db_devices', setup=True)
-        device_obj = self._create_device_object(device)
+        source = self.app.session.query(Sources).filter_by(plugin_name="UniFi", tenant_key=controller.primary_key).first()
+        device_obj = self._create_device_object(device, source)
+
         site_db = self.app.session.query( UniFi_Sites ).filter_by(name=site_id, controller=controller).first()
 
         if site_db == None:
@@ -1226,7 +1241,6 @@ class UniFiAPI(UniFiHandler):
                 time.sleep(pause_time)
             else:
                 break  # Function completed successfully within the timeout
-
 
 def full_run(app):
     unifi = app.handler.get('unifi_interface', 'unifi_api', setup=True)

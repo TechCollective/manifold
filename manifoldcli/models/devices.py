@@ -298,10 +298,11 @@ class DeviceObject(object):
         'install_date': 'str',
         'ip_address': 'list[IPAddress]',
         'mac_address': 'list[MacAddress]',
-        'company': 'str'
+        'company': 'str',
+        'source': 'str'
     }
 
-    def __init__(self, name=None, description=None, serial=None, manufacturer=None, model=None, install_date=None, ip_address=None, mac_address=None, company=None):
+    def __init__(self, name=None, description=None, serial=None, manufacturer=None, model=None, install_date=None, ip_address=None, mac_address=None, company=None, source=None):
         self._name = None
         self._description = None
         self._serial = None
@@ -311,6 +312,7 @@ class DeviceObject(object):
         self._ip_address = None
         self._mac_address = None
         self._company = None
+        self._source = None
 
         if name is not None:
             self.name = name
@@ -330,6 +332,8 @@ class DeviceObject(object):
             self.mac_address = mac_address
         if company is not None:
             self.company = company
+        if source is not None:
+            self.source = source
 
     @property
     def name(self):
@@ -393,6 +397,13 @@ class DeviceObject(object):
     @company.setter
     def company(self, company):
         self._company = company
+
+    @property
+    def source(self):
+        return self._source
+    @source.setter
+    def source(self, source):
+        self._source = source
 
     def to_dict(self):
         """Returns the model properties as a dict"""

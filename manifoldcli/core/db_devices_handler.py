@@ -1,6 +1,7 @@
 from cement import Handler
 from .db_interface import *
 from ..models.database.devices import *
+from ..models.database.sources import *
 from ..models.devices import *
 import sys
 
@@ -22,6 +23,12 @@ class DBDevicesHandler(DBInterface, Handler):
             device_db.company_key = device_obj.company
         else:
             self.app.log.error("device is not assoicated with a company!")
+            self.app.log.error(device_obj)
+            sys.exit()
+        if device_obj.source:
+            device_db.source = device_obj.source
+        else:
+            self.app.log.error("device is not assoicated with a source!")
             self.app.log.error(device_obj)
             sys.exit()
 
@@ -60,11 +67,19 @@ class DBDevicesHandler(DBInterface, Handler):
 
         #if device_db.install_date is None or device_obj.install_date < device_db.install_date:
         if device_db.install_date is None or is_newer_than(device_obj.install_date, device_db.install_date):
+
             device_db.install_date = device_obj.install_date
             changed = True
         if device_db.company_key != device_obj.company:
             device_db.company_key = device_obj.company
             changed = True
+        source_db = self.app.session.query(Sources).filter_by(primary_key=device_obj.source).first()
+
+        if device_db.source != device_obj.source:
+            # TODO This should not be hard coded. Need a way to say what source is primay
+            if source_db.plugin_name == "UniFi":
+                device_db.source = device_obj.source
+                changed = True
 
         if changed:
             self.app.log.debug("[Core] Updating Device: " + device_obj.name + " Source: " + source )
@@ -81,7 +96,8 @@ class DBDevicesHandler(DBInterface, Handler):
             model = device_db.model,
             install_date = device_db.install_date,
             company = device_db.company_key,
-            serial = device_db.serial
+            serial = device_db.serial,
+            source = device_db.source
         )
 
         return device_obj

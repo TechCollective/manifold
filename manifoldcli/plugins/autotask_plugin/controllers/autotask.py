@@ -103,6 +103,13 @@ class Autotask(Controller):
         autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
         autotask.device.sync_tenant(self.app.pargs.tenant_name)
 
+    @ex(
+        help='Sync all devices for all companies on all Autotask tenant',
+    )
+    def sync_all_devices(self):
+        autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
+        autotask.device.sync_all()
+
 
     # @ex(
     #     help='Sync contracts for a company',

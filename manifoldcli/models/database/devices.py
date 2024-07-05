@@ -32,6 +32,7 @@ class Devices(DBBase):
     company_key = Column(Integer, ForeignKey('companies.primary_key'), nullable=False)
     company = relationship("Companies", uselist=False)
     alerts = relationship("Alerts", secondary=device_alert_association, back_populates="devices")
+    source = Column(Integer, ForeignKey('sources.primary_key'), nullable=False)
 
     def __repr__(self):
-        return f"Devices(id={self.primary_key}, name='{self.name}', serial='{self.serial}', ip_addresses='{self.ip_addresses}', manufacturer='{self.manufacturer}', model='{self.model}')"
+        return f"Devices(id={self.primary_key}, name='{self.name}', serial='{self.serial}', manufacturer='{self.manufacturer}', model='{self.model}', install_date='{self.install_date}')"

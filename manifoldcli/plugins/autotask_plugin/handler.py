@@ -5,6 +5,7 @@ from ...models.database import *
 from ...models.devices import *
 from ...models.companies import *
 from pyautotask import atsite
+from pyautotask.atsite import APIError
 import datetime
 import sys
 import os
@@ -140,7 +141,7 @@ class AutotaskCompanyHandler(AutotaskCompanyInterface, Handler):
         db_companies = self.app.handler.get('db_interface', 'db_companies', setup=True)
         existing_entry = self.app.session.query(Autotask_Companies).filter_by(autotask_company_id=company['id'], autotask_tenant_key=tenant.primary_key).first()
         if existing_entry:
-            db_companies.update(company_obj, existing_entry.parent, "autotask")
+            db_companies.update(company_obj, existing_entry.parent, "Autotask")
             self.update_unifi(company, autotask_company_db=existing_entry)
         else:
             company_db = None
@@ -150,7 +151,7 @@ class AutotaskCompanyHandler(AutotaskCompanyInterface, Handler):
                 company_db=existing_company
 
             if company_db is None:
-                company_db = db_companies.add(company_obj, "autotask")
+                company_db = db_companies.add(company_obj, "Autotask")
 
             if not autotask_company_db:
                 autotask_company_db = Autotask_Companies(
@@ -197,17 +198,8 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
     class Meta:
         label = 'autotask_device_handler'
 
-    def sync_tenant(self, tenant_name):
-        tenant = self.app.session.query(Autotask_Tenants).filter_by(name=tenant_name).first()
-        
-        companies_db = self.app.session.query(Autotask_Companies).filter_by(autotask_tenant_key=tenant.primary_key).all()
-
-        for company in companies_db:
-            self.app.log.info("[Autotask plugin] Syncing devices for " + company.parent.name)
-            self.sync_company(tenant.name, company.autotask_company_id)
-
     def _pull_devices(self, at_db_company):
-        self.app.log.debug("[Autotask plugin] pulling devices from Autotask and adding them to the database")
+        self.app.log.debug("[Autotask plugin] Pulling devices from Autotask and adding them to the database")
         tenant = self.app.session.query(Autotask_Tenants).filter_by(primary_key=at_db_company.autotask_tenant_key).first()
         at = AutotaskTenantHandler.tenant_api_object(self, tenant)
         filter_fields = { 'op': 'and',
@@ -247,7 +239,7 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
                 # TODO, Need to send this to a hook so we can check if this device is legit for another source
                 db_devices = self.app.handler.get('db_interface', 'db_devices', setup=True)
 
-                db_devices.delete( at_db_device.parent, "autotask")
+                db_devices.delete( at_db_device.parent, "Autotask")
                 self.app.session.delete( at_db_device )
                 self.app.session.commit()
 
@@ -261,47 +253,49 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
             return None
 
     def update_autotask(self,db_device, at_device, tenant):
-        #self.app.log.debug("[Autotask plugin] Device exist in Autotask")
-        at = AutotaskTenantHandler.tenant_api_object(self, tenant)
-        filter_fields = {
-            'op': 'eq',
-            'field': 'id',
-            'value': at_device.autotask_device_id
-        }
-        at_ci = at.get_cis(filter_fields=str(filter_fields))[0]
-        changed = False
-        params = {
-            'id': str(at_ci['id'])
-        }
-        if at_ci['referenceTitle'] != db_device.name:
-            params['referenceTitle'] = db_device.name
-            changed = True
-        #TODO add description
-        if at_ci['serialNumber'] != db_device.serial:
-            params['serialNumber'] = db_device.serial
-            changed = True
+        # TODO, Need to change the line before to a look up of all Autotask sources
+        if db_device.source != 3:
+            changed = False
+            #self.app.log.debug("[Autotask plugin] Device exist in Autotask")
+            at = AutotaskTenantHandler.tenant_api_object(self, tenant)
+            filter_fields = {
+                'op': 'eq',
+                'field': 'id',
+                'value': at_device.autotask_device_id
+            }
+            at_ci = at.get_cis(filter_fields=str(filter_fields))[0]
+            params = {
+                'id': str(at_ci['id'])
+            }
+            if at_ci['referenceTitle'] != db_device.name:
+                params['referenceTitle'] = db_device.name
+                changed = True
+            #TODO add description
+            if at_ci['serialNumber'] != db_device.serial:
+                params['serialNumber'] = db_device.serial
+                changed = True
 
 
-        # date = at_ci['installDate'].split('T')[0]
-        # date_obj = datetime.datetime.strptime(date, "%Y-%m-%d")
+            # date = at_ci['installDate'].split('T')[0]
+            # date_obj = datetime.datetime.strptime(date, "%Y-%m-%d")
 
-        # if date_obj > db_device.install_date:
-        #     params['installDate'] = db_device.install_date
-        #     changed = True
-        
-        # product_id = self.get_product_id(tenant.name, db_device.manufacturer, db_device.model)
-        # if at_ci['productID'] != product_id:
-        #     params['productID'] = product_id
-        #     changed = True
-        #     print(product_id)
-        #     print(at_ci['productID'])
-        #     sys.exit()
+            # if date_obj > db_device.install_date:
+            #     params['installDate'] = db_device.install_date
+            #     changed = True
+            
+            # product_id = self.get_product_id(tenant.name, db_device.manufacturer, db_device.model)
+            # if at_ci['productID'] != product_id:
+            #     params['productID'] = product_id
+            #     changed = True
+            #     print(product_id)
+            #     print(at_ci['productID'])
+            #     sys.exit()
 
-        if changed:
-            #print(params)
-            #sys.exit()
-            self.app.log.debug("[Autotask plugin] updaing Device - " + str(params))
-            at.ci_push(params)
+            if changed:
+                #print(params)
+                #sys.exit()
+                self.app.log.debug("[Autotask plugin] updaing Device - Autotask: " +  at_ci['referenceTitle'] + " Params:" + str(params))
+                at.ci_push(params)
 
     def _push_devices(self, at_db_company):
         self.app.log.debug("[Autotask plugin] Finding other devices assoicated with the Autotask company and adding them to Autotask")
@@ -319,23 +313,6 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
                 self.update_autotask(db_device,at_device,tenant)
             else:
                 self.post(db_device, at_db_company, tenant)
-
-    def sync_company(self, tenant_name, company_id):
-        tenant = self.app.session.query(Autotask_Tenants).filter_by(name=tenant_name).first()
-        at_db_company = self.app.session.query( Autotask_Companies ).filter_by(autotask_company_id=company_id).first()
-        self.app.log.debug("[Autotask plugin] Syncing Devices for " + at_db_company.parent.name)
-
-        # TODO Check for duplicate CI's with the same serial numbers
-
-        # Pull Devices from Autotask and sync with local database
-        at_devices = self._pull_devices(at_db_company)
-
-        # Check if there are devices assoicated with the company that are not in Autotask
-        self._push_devices(at_db_company)
-
-        # TODO 
-        # Check if there are devices in the database that are no longer on Autotask
-        #self._remove_old_db(at_db_company, at_devices)
 
     def _get_products(self, tenant):
         #self.app.log.debug("[Autotask plugin] get tenant - " + tenant_name)
@@ -445,6 +422,7 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
     def _create_device_object(self, device, tenant_name):
         # device: unifi device
         tenant = self.app.session.query(Autotask_Tenants).filter_by(name=tenant_name).first()
+        source = self.app.session.query(Sources).filter_by(plugin_name="Autotask", tenant_key=tenant.primary_key).first()
         mac_list_obj = MacAddressListObject(results=[])
         #self.app.log.debug("[Autotask plugin] " + str(device))
         #self.app.log.debug("[Autotask plugin] Creating device object")
@@ -465,7 +443,8 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
                     )
                     mac_list_obj.add_result(mac_obj)
         device_obj = DeviceObject(
-            mac_address=mac_list_obj
+            mac_address=mac_list_obj,
+            source=source.primary_key
         )
         if device['referenceTitle']:
             device_obj.name=device['referenceTitle']
@@ -536,12 +515,11 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
             if existing_device:
                 device_db = existing_device
             else:
-                device_db = db_devices.add(device_obj, "autotask")
+                device_db = db_devices.add(device_obj, "Autotask")
 
-
-            existing_autotask = self.app.session.query( Autotask_Devices ).filter_by(device_key=existing_device.primary_key).first()
+            existing_autotask = self.app.session.query( Autotask_Devices ).filter_by(device_key=device_db.primary_key).first()
             if existing_autotask:
-                db_devices.update(device_obj, existing_autotask.parent, "autotask")
+                db_devices.update(device_obj, existing_autotask.parent, "Autotask")
             else:
                 if device_db.serial:
                     at = AutotaskTenantHandler.tenant_api_object(self, tenant_db)
@@ -552,13 +530,19 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
                     filter_fields = company_filter + "," + serial_filter
 
                     at_ci = at.get_cis(filter_fields=str(filter_fields))[0]
-
+                    
                     autotask_device_db = Autotask_Devices(
                         autotask_device_id = at_ci['id'],
                         parent = device_db,
                         autotask_company_key = company_db.primary_key,
-                        device_key = device_db.primary_key
+                        device_key = device_db.primary_key,
                     )
+                    if at_ci['userDefinedFields']:
+                        for udf in at_ci['userDefinedFields']:
+                            if udf['name'] == 'UniFi Alerts Ignore List' and udf['value'] != None:
+                                #ignore_alert = at_ci['userDefinedFields']['UniFi Alerts Ignore List']
+                                sys.exit(at_ci)
+
                     self.app.log.debug("[Autotask plugin] Linking device to autotask_device. [Device: " + str(at_ci['id']) + "]")
                     self.app.session.add(autotask_device_db)
                     self.app.session.commit()
@@ -604,13 +588,65 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
             
         }
         # TODO grab return, which should have the id. Add device to the autotask device table
-        ci_return = at.ci_push(params)
-        self.app.log.debug("[Autotask plugin] CI Push returned: " + str(ci_return))
-        ci = at.get_ci_by_id(str(ci_return['itemId']))
-        self.app.log.debug("[Autotask plugin] full CI: " + str(ci))
-        device_obj = self._create_device_object(ci[0], tenant.name)
-        self.app.log.info("[Autotask plugin] Need to add device to Autotask Devices")
-        self.update_db(device_obj, at_company.autotask_company_id, tenant.name)
+        ci_return = None
+        try:
+            ci_return = at.ci_push(params)
+        except APIError as e:
+            self.app.log.error(f"[Autotask plugin] caught: {e}")
+        if ci_return:
+            self.app.log.debug("[Autotask plugin] CI Push returned: " + str(ci_return))
+            ci = at.get_ci_by_id(str(ci_return['itemId']))
+            self.app.log.debug("[Autotask plugin] full CI: " + str(ci))
+            device_obj = self._create_device_object(ci[0], tenant.name)
+            self.app.log.info("[Autotask plugin] Need to add device to Autotask Devices")
+            self.update_db(device_obj, at_company.autotask_company_id, tenant.name)
+        else:
+            self.app.log.error("[Autotask plugin] could not push device to Autotask")
+            self.app.log.error("[Autotask plugin] " + str(device))
+
+    def sync_company(self, tenant_name, company_id):
+        tenant = self.app.session.query(Autotask_Tenants).filter_by(name=tenant_name).first()
+        at_db_company = self.app.session.query( Autotask_Companies ).filter_by(autotask_company_id=company_id).first()
+        self.app.log.debug("[Autotask plugin] Syncing Devices for " + at_db_company.parent.name)
+
+        # TODO Check for duplicate CI's with the same serial numbers
+
+        # Pull Devices from Autotask and sync with local database
+        at_devices = self._pull_devices(at_db_company)
+        
+        # Checking for a vaild source
+        none_devices = 0
+        for at_device in at_devices:
+            if not at_device['rmmDeviceID']:
+                if at_device['referenceTitle'] == None:
+                     none_devices += 1
+                # else:
+                #     sys.exit(at_device)
+        if none_devices > 1:
+            self.app.log.error("[Autotask plugin] " + at_db_company.parent.name + " has too many 'None' devices")
+
+        # sys.exit()
+
+        # Check if there are devices assoicated with the company that are not in Autotask
+        self._push_devices(at_db_company)
+
+        # TODO 
+        # Check if there are devices in the database that are no longer on Autotask
+        #self._remove_old_db(at_db_company, at_devices)
+
+    def sync_tenant(self, tenant_db):
+        companies_db = self.app.session.query(Autotask_Companies).filter_by(autotask_tenant_key=tenant_db.primary_key).all()
+
+        for company in companies_db:
+            self.app.log.info("[Autotask plugin] Syncing devices for " + company.parent.name)
+            self.sync_company(tenant_db.name, company.autotask_company_id)
+
+    def sync_all(self):
+        self.app.log.debug("[Autotask plugin] Syning all devices for all tenants")
+        autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
+        tenants = autotask.tenant.list()
+        for tenant in tenants:
+            self.sync_tenant(tenant)
 
 class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
     class Meta:
@@ -765,7 +801,15 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
 
             ticket = at.create_query("tickets", filter_fields)
 
-            if not ticket:
+            # Check ignore list
+            
+            ignore = False
+            if device_db.ignore_alert:
+                for c in device_db.ignore_alert:
+                    if device_db == subissue_db.value:
+                        ignore = True
+
+            if not ticket and not ignore:
                 # TODO Check if there is a ticket for the other devices on this alert. 
                 # If not, add the other devices to this ticket. 
                 # If there is, update ticket with these devices and add a note
