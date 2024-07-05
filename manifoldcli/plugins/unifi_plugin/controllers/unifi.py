@@ -52,7 +52,7 @@ class UniFi(Controller):
         unifi = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
         unifi.controller.add(name=self.app.pargs.controller_name, url=self.app.pargs.controller_url, port=self.app.pargs.controller_port)
         # FIXME output better!
-        print("Create an API user in your controller, then add the following to your unifi enviroment file, replace wiht the correct values.\n" + self.app.pargs.controller_name + ".user=USERNAME\n" + self.app.pargs.controller_name + ".password=PASSWORD")
+        print("Create an API user in your controller, then add the following to your unifi enviroment file, replace with the correct values.\n" + self.app.pargs.controller_name + ".user=USERNAME\n" + self.app.pargs.controller_name + ".password=PASSWORD")
 
     @ex(
         help='List all UniFi Controllers'

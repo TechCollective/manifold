@@ -33,7 +33,7 @@ def load(app):
     app.log.debug('UniFi plugin loaded')
     #app.hook.register('post_setup', add_template_dir)
     app.hook.register('post_setup', unifi_post_setup_hook)
-    app.hook.register('full_run', full_run, 100)
+    app.hook.register('full_run', full_run, weight=100)
 
 
 

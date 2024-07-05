@@ -34,7 +34,7 @@ def load(app):
     app.hook.register('alert_update', alert_update_hook)
     app.hook.register('alert_cleared', alert_cleared_hook)
     app.hook.register('alert_device_cleared', alert_device_cleared_hook)
-    app.hook.register('full_run', full_run, 0)
+    app.hook.register('full_run', full_run, weight=0)
     app.hook.register('hook_check_alert', hook_check_alert)
     
     app.log.debug('Autotask plugin loaded')

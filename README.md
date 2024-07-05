@@ -13,6 +13,13 @@ $ pip install -r requirements.txt
 $ python setup.py install
 ```
 
+## Plugin requirements
+'''
+$ pip install -r manifoldcli/plugins/unifi_plugin/requirements.txt
+
+$ pip install -r manifoldcli/plugins/autotask_plugin/requirements.txt
+'''
+
 ## Development
 
 This project includes a number of helpers in the `Makefile` to streamline common development tasks.
@@ -26,12 +33,20 @@ The following demonstrates setting up and working with a development environment
 
 $ make virtualenv
 
-$ source env/bin/activate
+$ source .venv/bin/activate
 
 
 ### run manifoldcli cli application
 
 $ manifoldcli --help
+
+### setup the environment
+
+$ mkdir .env
+$ chmod -R o-rwx .env
+$ manifoldcli unifi add-controller
+$ 
+
 
 
 ### run pytest / coverage

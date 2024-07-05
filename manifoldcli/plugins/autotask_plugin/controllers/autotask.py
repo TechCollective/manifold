@@ -37,7 +37,7 @@ class Autotask(Controller):
         autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
         autotask.tenant.add(name=self.app.pargs.autotask_name, tenant_host=self.app.pargs.autotask_host)
         # FIXME output better!
-        print("Create an API user in your Autotask User, then add the following to your autotask enviroment file, replace wiht the correct values.")
+        print("Create an API user in your Autotask User, then add the following to your autotask enviroment file, replace with the correct values.")
         print(" " + self.app.pargs.autotask_name + ".user=USERNAME")
         print(" " + self.app.pargs.autotask_name + ".password=PASSWORD")
         print(" " + self.app.pargs.autotask_name + ".interactioncode=PASSWORD")

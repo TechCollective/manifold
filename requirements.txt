@@ -7,3 +7,6 @@ sqlalchemy.orm
 pyfiglet
 python-dotenv
 prompt_toolkit
+six
+python-dateutil
+pytz
