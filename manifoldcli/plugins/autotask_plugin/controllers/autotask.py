@@ -67,7 +67,8 @@ class Autotask(Controller):
         autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
         tenants = autotask.tenant.list()
         for tenant in tenants:
-            autotask.company.sync_tenant(tenant)
+            if tenant.name == self.app.pargs.tenant_name:
+                autotask.company.sync_tenant(tenant)
 
     @ex(
         help='Sync device for a company',
@@ -101,7 +102,11 @@ class Autotask(Controller):
     )
     def sync_tenant_devices(self):
         autotask = self.app.handler.get('autotask_interface', 'autotask_api', setup=True)
-        autotask.device.sync_tenant(self.app.pargs.tenant_name)
+        tenants = autotask.tenant.list()
+        for tenant in tenants:
+            if tenant.name == self.app.pargs.tenant_name:
+                autotask.device.sync_tenant(tenant)
+        #autotask.device.sync_tenant(self.app.pargs.tenant_name)
 
     @ex(
         help='Sync all devices for all companies on all Autotask tenant',

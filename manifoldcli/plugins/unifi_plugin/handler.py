@@ -204,7 +204,7 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
                     self.app.session.commit()
                 else:
                     # TODO check last sync and sync unifi sites if it's after sync time.
-                    self.app.log.warning("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
+                    self.app.log.debug("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
         else:
             site_id = site_ids
             if len(site_id) == 8:
@@ -215,11 +215,14 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
                     self.app.session.commit()
                 else:
                     # TODO check last sync and sync unifi sites if it's after sync time.
-                    self.app.log.warning("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
+                    self.app.log.debug("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
             else:
                 site_db = self.get_host_and_port_from_autotask_udf(site_ids)
-                site_db.parent_id = company_key
-                self.app.session.commit()
+                if site_db:
+                    site_db.parent_id = company_key
+                    self.app.session.commit()
+                else:
+                    self.app.log.debug("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
 
 class UniFiDeviceHandler(UniFiDeviceInterface, Handler):
     class Meta:
@@ -1039,6 +1042,8 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
 
     def verify_old_alerts_by_site(self, unifi_site_db):
         db_alerts = self.app.handler.get('db_interface', 'db_alerts', setup=True)
+        if unifi_site_db is None:
+            return
         if unifi_site_db.parent_id:
             company_db = self.app.session.query( Companies ).filter_by( primary_key=unifi_site_db.parent_id  ).first()
             self.app.log.info("[UniFi plugin] Verifing past alerts for " + company_db.name + " Site: " + unifi_site_db.desc + " ID: " + unifi_site_db.name)
@@ -1077,7 +1082,7 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                             self.app.log.info("[UniFi plugin] All devices are back online. Clearing alert.")
                             db_alerts.clear(alert)
                         else:
-                            self.app.log.debug("[UniFi plugin] At least one fo the devices are back online. Need to update alert.")
+                            self.app.log.debug("[UniFi plugin] " + unifi_site_db.desc + "At least one of the devices are back online. Need to update alert.")
                             for res in self.app.hook.run('alert_device_cleared', self.app):
                                 pass
                             # db_alerts.update(alert)
@@ -1096,7 +1101,6 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                 unifi = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
                 #unifi.run_with_timeout(30, 60, self.verify_old_alerts_by_site, args=(unifi_site_db,))
                 self.verify_old_alerts_by_site(unifi_site_db)
-                
 
     def sync_site(self, controller, site_unifi):
         # TODO We should replace all this code wiht a "creaet_site_object" function and add the device_unifi = self.get_unifi_device_from_alert(c, unifi_alert) to it.
@@ -1246,6 +1250,11 @@ def full_run(app):
     unifi = app.handler.get('unifi_interface', 'unifi_api', setup=True)
     controllers = app.session.query(UniFi_Controllers).all()
     for controller in controllers:
+
+        if not app.session.is_active:
+            print("add session")
+            app.session.add(controller)
+
         # TODO add a timeout feature when running these. Look into threading or Concurrent Futures
 
         # TODO Make the time configuratable        

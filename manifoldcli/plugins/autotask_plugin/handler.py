@@ -136,7 +136,6 @@ class AutotaskCompanyHandler(AutotaskCompanyInterface, Handler):
                     unifi.site.link_sites_to_company_from_autotask(site_ids=site_ids, company_key=autotask_company_db.parent.primary_key)
 
     def update_db(self, company, tenant):
-        self.app.log.info("[Autotask plugin] " + company['companyName'])
         company_obj = self._create_company_object(company)
         db_companies = self.app.handler.get('db_interface', 'db_companies', setup=True)
         existing_entry = self.app.session.query(Autotask_Companies).filter_by(autotask_company_id=company['id'], autotask_tenant_key=tenant.primary_key).first()
@@ -160,12 +159,13 @@ class AutotaskCompanyHandler(AutotaskCompanyInterface, Handler):
                     autotask_tenant_key = tenant.primary_key,
                     parent = company_db
                 )
-            self.update_unifi(company, autotask_company_db=autotask_company_db)
 
-            self.app.log.debug("[Autotask plugin] Adding company to DB:  [Company: " + company['companyName'] + " Company ID: " + str(company['id']) + "]")
+            self.app.log.debug("[Autotask plugin] Adding company to DB:  [Company: " + company['companyName'] + " | Company ID: " + str(company['id']) + "]")
             self.app.session.add(autotask_company_db)
             self.app.session.commit()
+
             # FIXME Might trigger a hook
+            self.update_unifi(company, autotask_company_db=autotask_company_db)
 
     def _contracts_entity_fields_need_refresh(self, tenant):
         return_value = True
@@ -358,16 +358,24 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
     def _ci_entity_fields_need_refresh(self, tenant):
         return_value = None
         rmm_manufacturer_last_sync = self.app.session.query(Autotask_Cache_Last_Sync).filter_by(name=Autotask_RMM_Manufacturer.__tablename__, tenant_key = tenant.primary_key).first()
-        if rmm_manufacturer_last_sync.last_sync < (rmm_manufacturer_last_sync.last_sync - datetime.timedelta(hours=24)):
-            return True
+        
+        if rmm_manufacturer_last_sync:
+            if rmm_manufacturer_last_sync.last_sync < (rmm_manufacturer_last_sync.last_sync - datetime.timedelta(hours=24)):
+                return True
+            else:
+                return_value = False
         else:
-            return_value = False
+            return True
+        
         rmm_model_last_sync = self.app.session.query(Autotask_Cache_Last_Sync).filter_by(name=Autotask_RMM_Model.__tablename__, tenant_key = tenant.primary_key).first()        
-        if rmm_model_last_sync.last_sync < (rmm_model_last_sync.last_sync - datetime.timedelta(hours=24)):
-            return True
+        if rmm_model_last_sync:
+            if rmm_model_last_sync.last_sync < (rmm_model_last_sync.last_sync - datetime.timedelta(hours=24)):
+                return True
+            else:
+                return_value = False
+            return return_value
         else:
-            return_value = False
-        return return_value
+            return True
 
     def _get_ci_entity_fields(self, tenant_name):
         tenant = self.app.session.query(Autotask_Tenants).filter_by(name=tenant_name).first()
@@ -378,9 +386,11 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
         if self._ci_entity_fields_need_refresh(tenant):
             self.app.log.debug("[Autotask plugin] Clearing CI Entries cashe data")
             rmm_manufacturer = self.app.session.query( Autotask_RMM_Manufacturer ).filter_by(tenant_key=tenant.primary_key).all()
+            if rmm_manufacturer:
+                self.app.session.delete(rmm_manufacturer)
             rmm_model = self.app.session.query( Autotask_RMM_Model ).filter_by(tenant_key=tenant.primary_key).all()
-            self.app.session.delete(rmm_manufacturer)
-            self.app.session.delete(rmm_model)
+            if rmm_model:
+                self.app.session.delete(rmm_model)
             self.app.session.commit()
 
             self.app.log.debug("[Autotask plugin] Grabing cache for rmm manufacturers and models")
@@ -916,7 +926,7 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
     def close_ticket(self, alert_db):
         ticket_db = self.app.session.query( Autotask_Tickets ).filter_by( alert_key=alert_db.primary_key ).first()
         if ticket_db:
-            self.app.log.error("[Autotask plugin] Closing Ticket: " + ticket_db.ticket_number)
+            self.app.log.debug("[Autotask plugin] Closing Ticket: " + ticket_db.ticket_number)
             source_db = self.app.session.query( Sources ).filter_by( primary_key=alert_db.source_key ).first()
             tenant = self.app.session.query( Autotask_Tenants ).filter_by( primary_key=source_db.tenant_key ).first()
             if not tenant:
@@ -1033,14 +1043,16 @@ class AutotaskContractHandler(AutotaskContractInterface, Handler):
 
     def _contracts_entity_fields_need_refresh(self, tenant_db):
         cache_name = Autotask_Contract_Category.__tablename__
-        last_sync = self.app.session.query(Autotask_Cache_Last_Sync).filter_by(name=cache_name).first().last_sync
-        if last_sync:
-            if last_sync < datetime.datetime.now() - datetime.timedelta(days=7):
-                return True
+        cache_name_last_sync = self.app.session.query(Autotask_Cache_Last_Sync).filter_by(name=cache_name).first()
+        if cache_name_last_sync:
+            last_sync = self.app.session.query(Autotask_Cache_Last_Sync).filter_by(name=cache_name).first().last_sync
+            if last_sync:
+                if last_sync < datetime.datetime.now() - datetime.timedelta(days=7):
+                    return True
+                else:
+                    return False
             else:
-                return False
-        else:
-            return True
+                return True
 
     def _get_contracts_entity_fields(self, tenant_db):
         at = AutotaskTenantHandler.tenant_api_object(self, tenant_db)
@@ -1225,13 +1237,13 @@ def full_run(app):
             try:
                 autotask.company.sync_tenant(tenant)
             except Exception as e:
-                app.log.error("[Autotask plugin] " + str(e))
+                app.log.error("[Autotask plugin] Function: Company Sync Tenant | Tenant: " + tenant.name + " - " + str(e))
 
             app.log.info("[Autotask plugin] Syncing devices")
             try:
                 autotask.device.sync_tenant(tenant)
             except Exception as e:
-                app.log.error("[Autotask plugin] " + str(e))
+                app.log.error("[Autotask plugin] Function: Device Sync Tenant | Tenant: " + tenant.name + " - " + str(e))
 
             # TODO This is too much for every 24 hours. Neeed to create a last sync for each type of sync and configure them based on need
             # TODO Maybe we can do contracts opertunisitly. Meaning we only check for a contract when it's relavant. 
@@ -1240,13 +1252,13 @@ def full_run(app):
             try:
                 autotask.contract.sync_tenant(tenant)
             except Exception as e:
-                app.log.error("[Autotask plugin] " + str(e))
+                app.log.error("[Autotask plugin] Function: Contract Sync Tenant | Tenant: " + tenant.name + " - " + str(e))
 
             app.log.info("[Autotask plugin] Check for stagnant tickets")
             try:
                 autotask.ticket.check_all_stagnant()
             except Exception as e:
-                app.log.error("[Autotask plugin] " + str(e))
+                app.log.error("[Autotask plugin] Function: Ticket Check All Stagnant | Tenant: " + tenant.name + " - " + str(e))
 
             tenant.last_full_sync = datetime.datetime.now()
             app.session.commit()

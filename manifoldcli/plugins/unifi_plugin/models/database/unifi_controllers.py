@@ -10,5 +10,5 @@ class UniFi_Controllers(DBBase):
     host = Column(String, unique=True) #fqhn
     port = Column(Integer)
     is_active = Column(Boolean, default=True)
-    last_full_sync = Column(DateTime)
+    last_full_sync = Column(DateTime, nullable=True)
     sites: Mapped[List["UniFi_Sites"]] = relationship(back_populates="controller")

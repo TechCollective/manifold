@@ -9,4 +9,4 @@ class Autotask_Tenants(DBBase):
     name = Column(String, unique=True)
     host = Column(String, unique=True) #fqhn
     is_active = Column(Boolean, default=True)
-    last_full_sync = Column(DateTime)
+    last_full_sync = Column(DateTime, nullable=True)
