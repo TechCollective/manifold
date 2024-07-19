@@ -1195,7 +1195,7 @@ def alert_update_hook( app ):
 def alert_device_cleared_hook( app ):
     app.log.debug("[Autotask plugin] Clearing device from an alert")
     autotask = app.handler.get('autotask_interface', 'autotask_api', setup=True)
-    autotask.ticket.alert_device_cleared(app)
+    autotask.ticket.alert_device_cleared()
 
 def alert_cleared_hook( app ):
     app.log.debug("[Autotask plugin] Clearing old alert")
