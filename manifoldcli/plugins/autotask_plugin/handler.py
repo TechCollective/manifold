@@ -1037,8 +1037,7 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
         # for time in ticket_times:
         #     self.app.log.info("[Autotask plugin] Ticket time: " + str(time))
 
-    def alert_device_cleared(self, last_alert):
-        print(last_alert)
+    def alert_device_cleared(self):
         sys.exit("Need a function")
 
 class AutotaskContractHandler(AutotaskContractInterface, Handler):
@@ -1196,7 +1195,7 @@ def alert_update_hook( app ):
 def alert_device_cleared_hook( app ):
     app.log.debug("[Autotask plugin] Clearing device from an alert")
     autotask = app.handler.get('autotask_interface', 'autotask_api', setup=True)
-    autotask.ticket.alert_device_cleared(app.last_alert)
+    autotask.ticket.alert_device_cleared(app)
 
 def alert_cleared_hook( app ):
     app.log.debug("[Autotask plugin] Clearing old alert")
