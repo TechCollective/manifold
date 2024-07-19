@@ -1082,7 +1082,7 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
                             self.app.log.info("[UniFi plugin] All devices are back online. Clearing alert.")
                             db_alerts.clear(alert)
                         else:
-                            self.app.log.debug("[UniFi plugin] " + unifi_site_db.desc + "At least one of the devices are back online. Need to update alert.")
+                            self.app.log.debug("[UniFi plugin] " + unifi_site_db.desc + " - At least one of the devices are back online. Need to update alert.")
                             for res in self.app.hook.run('alert_device_cleared', self.app):
                                 pass
                             # db_alerts.update(alert)
