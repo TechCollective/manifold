@@ -974,6 +974,8 @@ class UniFiAlertsHandler(UniFiAlertsInterface, Handler):
             # elif alert_obj.alert_type.name == "FirmwareDownloadFailed":
             #     self.alert_firmware_download_failed(alert_obj)
             # IPSUpdateError
+            #elif alert_obj.alert_type.name == "RestartedUnknown":
+
             else:
                 self.alert_unknown_alert(alert_obj)
         else:
@@ -1252,7 +1254,7 @@ def full_run(app):
     for controller in controllers:
 
         if not app.session.is_active:
-            print("add session")
+            app.log.error("[UniFi plugin] Lost datebase connection.")
             app.session.add(controller)
 
         # TODO add a timeout feature when running these. Look into threading or Concurrent Futures
