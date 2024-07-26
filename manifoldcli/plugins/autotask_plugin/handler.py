@@ -816,8 +816,8 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
             
             ignore = False
             if device_db.ignore_alert:
-                for c in device_db.ignore_alert:
-                    if device_db == subissue_db.value:
+                for ignore_alert in device_db.ignore_alert:
+                    if ignore_alert == subissue_db.value:
                         ignore = True
 
             if not ticket and not ignore:
