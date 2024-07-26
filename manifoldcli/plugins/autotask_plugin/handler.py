@@ -492,9 +492,12 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
             if rmm_model:
                 device_obj.model = rmm_model.label
 
+        device_obj.autotask_device = device
+
         #if device_obj.manufacturer != None:
-
-
+        # for udf in device['userDefinedFields']:
+        #     if udf['name'] == 'UniFi Alerts Ignore List':
+        #         device_obj.ignore_alert = udf['value'] # Autotask Device Add on
 
         if device_obj.name or device_obj.serial:
             return device_obj
@@ -529,32 +532,41 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
                 device_db = db_devices.add(device_obj, "Autotask")
 
             existing_autotask = self.app.session.query( Autotask_Devices ).filter_by(device_key=device_db.primary_key).first()
+
             if existing_autotask:
                 db_devices.update(device_obj, existing_autotask.parent, "Autotask")
+
+                if existing_autotask.autotask_device_id != device_obj.autotask_device['id']:
+                    existing_autotask.autotask_device_id = device_obj.autotask_device['id']
+                if existing_autotask.parent != device_db:
+                    existing_autotask.parent = device_db
+                if existing_autotask.autotask_company_key != company_db.primary_key:
+                    existing_autotask.autotask_company_key = company_db.primary_key
+                if existing_autotask.device_key != device_db.primary_key:
+                    existing_autotask.device_key = device_db.primary_key
+                if device_obj.autotask_device['userDefinedFields']:
+                    for udf in device_obj.autotask_device['userDefinedFields']:
+                        if udf['name'] == 'UniFi Alerts Ignore List' and udf['value'] != None:
+                            existing_autotask.ignore_alert = udf['value']
+
+                self.app.log.debug("[Autotask plugin] Update Autotask_device. [Device: " + str(device_obj.autotask_device['id']) + "]")
+                self.app.session.commit()
             else:
                 if device_db.serial:
-                    at = AutotaskTenantHandler.tenant_api_object(self, tenant_db)
-                    filter_fields = None
-                    company_filter = at.create_filter('eq', 'companyID', company_id)
 
-                    serial_filter = at.create_filter('eq', 'serialNumber', device_db.serial)
-                    filter_fields = company_filter + "," + serial_filter
-
-                    at_ci = at.get_cis(filter_fields=str(filter_fields))[0]
                     
                     autotask_device_db = Autotask_Devices(
-                        autotask_device_id = at_ci['id'],
+                        autotask_device_id = device_obj.autotask_device['id'],
                         parent = device_db,
                         autotask_company_key = company_db.primary_key,
                         device_key = device_db.primary_key,
                     )
-                    if at_ci['userDefinedFields']:
-                        for udf in at_ci['userDefinedFields']:
+                    if device_obj.autotask_device['userDefinedFields']:
+                        for udf in device_obj.autotask_device['userDefinedFields']:
                             if udf['name'] == 'UniFi Alerts Ignore List' and udf['value'] != None:
-                                #ignore_alert = at_ci['userDefinedFields']['UniFi Alerts Ignore List']
-                                sys.exit(at_ci)
+                                existing_autotask.ignore_alert = udf['value']
 
-                    self.app.log.debug("[Autotask plugin] Linking device to autotask_device. [Device: " + str(at_ci['id']) + "]")
+                    self.app.log.debug("[Autotask plugin] Linking device to Autotask_device. [Device: " + str(device_obj.autotask_device['id']) + "]")
                     self.app.session.add(autotask_device_db)
                     self.app.session.commit()
                 # TODO create an else that looks for other things to match. Maybe Mac Address
