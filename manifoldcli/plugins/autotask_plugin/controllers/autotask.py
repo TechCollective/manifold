@@ -53,6 +53,7 @@ class Autotask(Controller):
         for tenant in tenants:
             print(" - " + tenant.name + " " + tenant.host )
 
+    # TODO If there is only 1 tenant in the database, assum that tenant. i..e. don't error and force the user to pick the only tenant
     @ex(
         help='Sync all companies in a tenant',
         arguments=[

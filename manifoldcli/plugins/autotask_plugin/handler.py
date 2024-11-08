@@ -9,6 +9,7 @@ from pyautotask.atsite import APIError
 import datetime
 import sys
 import os
+from sqlalchemy.exc import SQLAlchemyError
 
 class AutotaskTenantHandler(AutotaskTenantInterface, Handler):
     class Meta:
@@ -124,6 +125,7 @@ class AutotaskCompanyHandler(AutotaskCompanyInterface, Handler):
         )
         return company_obj
 
+    # TODO Need to make it where we can run this manually
     def update_unifi(self, company, autotask_company_db):
             # TODO probably turn this into a hook
             if self.app.config.get('unifi', 'sites2companies') == "autotask-udf":
@@ -525,36 +527,48 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
                 device_obj.company = company_db.primary_key
 
             existing_device = self.app.session.query( Devices ).filter_by( serial=device_obj.serial, company_key=company_db.primary_key ).first()
-            device_db = None
-            if existing_device:
-                device_db = existing_device
-            else:
-                device_db = db_devices.add(device_obj, "Autotask")
+
+            device_db = existing_device if existing_device else db_devices.add(device_obj, "Autotask")
+            # device_db = None
+            # if existing_device:
+            #     device_db = existing_device
+            # else:
+            #     device_db = db_devices.add(device_obj, "Autotask")
 
             existing_autotask = self.app.session.query( Autotask_Devices ).filter_by(device_key=device_db.primary_key).first()
 
             if existing_autotask:
-                db_devices.update(device_obj, existing_autotask.parent, "Autotask")
+                conflicting_record = self.app.session.query(Autotask_Devices).filter_by(
+                    autotask_device_id=device_obj.autotask_device['id'],
+                    autotask_company_key=company_db.primary_key
+                ).first()
 
-                if existing_autotask.autotask_device_id != device_obj.autotask_device['id']:
-                    existing_autotask.autotask_device_id = device_obj.autotask_device['id']
-                if existing_autotask.parent != device_db:
-                    existing_autotask.parent = device_db
-                if existing_autotask.autotask_company_key != company_db.primary_key:
-                    existing_autotask.autotask_company_key = company_db.primary_key
-                if existing_autotask.device_key != device_db.primary_key:
-                    existing_autotask.device_key = device_db.primary_key
-                if device_obj.autotask_device['userDefinedFields']:
-                    for udf in device_obj.autotask_device['userDefinedFields']:
-                        if udf['name'] == 'UniFi Alerts Ignore List' and udf['value'] != None:
-                            existing_autotask.ignore_alert = udf['value']
+                if conflicting_record and conflicting_record.primary_key != existing_autotask.primary_key:
+                    self.app.log.error("[Autotask plugin] Conflicting record found with the same 'autotask_device_id' and 'autotask_company_key'. Skipping update.")
+                else:
+                    db_devices.update(device_obj, existing_autotask.parent, "Autotask")
 
-                self.app.log.debug("[Autotask plugin] Update Autotask_device. [Device: " + str(device_obj.autotask_device['id']) + "]")
-                self.app.session.commit()
+                    if existing_autotask.autotask_device_id != device_obj.autotask_device['id']:
+                        existing_autotask.autotask_device_id = device_obj.autotask_device['id']
+                    if existing_autotask.parent != device_db:
+                        existing_autotask.parent = device_db
+                    if existing_autotask.autotask_company_key != company_db.primary_key:
+                        existing_autotask.autotask_company_key = company_db.primary_key
+                    if existing_autotask.device_key != device_db.primary_key:
+                        existing_autotask.device_key = device_db.primary_key
+                    if device_obj.autotask_device['userDefinedFields']:
+                        for udf in device_obj.autotask_device['userDefinedFields']:
+                            if udf['name'] == 'UniFi Alerts Ignore List' and udf['value'] is not None:
+                                existing_autotask.ignore_alert = udf['value']
+
+                    self.app.log.debug(f"[Autotask plugin] Update Autotask_device. [Device: " + str(device_obj.autotask_device['id']) + "]")
+                    try:
+                        self.app.session.commit()
+                    except SQLAlchemyError as e:
+                        self.app.log.error(f"[Autotask plugin] Error committing changes: {e}")
+                        self.app.session.rollback()  # Rollback the session to maintain consistency
             else:
                 if device_db.serial:
-
-                    
                     autotask_device_db = Autotask_Devices(
                         autotask_device_id = device_obj.autotask_device['id'],
                         parent = device_db,
@@ -564,11 +578,15 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
                     if device_obj.autotask_device['userDefinedFields']:
                         for udf in device_obj.autotask_device['userDefinedFields']:
                             if udf['name'] == 'UniFi Alerts Ignore List' and udf['value'] != None:
-                                existing_autotask.ignore_alert = udf['value']
+                                autotask_device_db.ignore_alert = udf['value']
 
                     self.app.log.debug("[Autotask plugin] Linking device to Autotask_device. [Device: " + str(device_obj.autotask_device['id']) + "]")
                     self.app.session.add(autotask_device_db)
-                    self.app.session.commit()
+                    try:
+                        self.app.session.commit()
+                    except SQLAlchemyError as e:
+                        self.app.log.error(f"[Autotask plugin] Error committing changes: {e}")
+                        self.app.session.rollback()  # Rollback the session to maintain consistency
                 # TODO create an else that looks for other things to match. Maybe Mac Address
         # TODO remove all devices not still connected to a Autotask Company
         
@@ -630,39 +648,42 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
     def sync_company(self, tenant_name, company_id):
         tenant = self.app.session.query(Autotask_Tenants).filter_by(name=tenant_name).first()
         at_db_company = self.app.session.query( Autotask_Companies ).filter_by(autotask_company_id=company_id).first()
-        self.app.log.debug("[Autotask plugin] Syncing Devices for " + at_db_company.parent.name)
+        if at_db_company is None:
+            self.app.log.error("[Autotask plugin] Cannot find company with an Autotask id " + company_id + " on tenant " + tenant_name)
+        else:
+            self.app.log.debug("[Autotask plugin] Syncing Devices for " + at_db_company.parent.name)
 
-        # TODO Check for duplicate CI's with the same serial numbers
+            # TODO Check for duplicate CI's with the same serial numbers
 
-        # Pull Devices from Autotask and sync with local database
-        at_devices = self._pull_devices(at_db_company)
-        
-        # Checking for a vaild source
-        none_devices = 0
-        for at_device in at_devices:
-            if not at_device['rmmDeviceID']:
-                if at_device['referenceTitle'] == None:
-                     none_devices += 1
-                # else:
-                #     sys.exit(at_device)
-        if none_devices > 1:
-            self.app.log.error("[Autotask plugin] " + at_db_company.parent.name + " has too many 'None' devices")
+            # Pull Devices from Autotask and sync with local database
+            at_devices = self._pull_devices(at_db_company)
 
-        # sys.exit()
+            # Checking for a vaild source
+            none_devices = 0
+            for at_device in at_devices:
+                if not at_device['rmmDeviceID']:
+                    if at_device['referenceTitle'] == None:
+                        none_devices += 1
+                    # else:
+                    #     sys.exit(at_device)
+            if none_devices > 1:
+                self.app.log.error("[Autotask plugin] " + at_db_company.parent.name + " has too many 'None' devices")
 
-        # Check if there are devices assoicated with the company that are not in Autotask
-        self._push_devices(at_db_company)
+            # sys.exit()
 
-        # TODO 
-        # Check if there are devices in the database that are no longer on Autotask
-        #self._remove_old_db(at_db_company, at_devices)
+            # Check if there are devices assoicated with the company that are not in Autotask
+            self._push_devices(at_db_company)
+
+            # TODO 
+            # Check if there are devices in the database that are no longer on Autotask
+            #self._remove_old_db(at_db_company, at_devices)
 
     def sync_tenant(self, tenant_db):
-        companies_db = self.app.session.query(Autotask_Companies).filter_by(autotask_tenant_key=tenant_db.primary_key).all()
+        at_companies_db = self.app.session.query(Autotask_Companies).filter_by(autotask_tenant_key=tenant_db.primary_key).all()
 
-        for company in companies_db:
-            self.app.log.info("[Autotask plugin] Syncing devices for " + company.parent.name)
-            self.sync_company(tenant_db.name, company.autotask_company_id)
+        for at_company in at_companies_db:
+            self.app.log.info("[Autotask plugin] Syncing devices for " + at_company.parent.name + " (ID: " + at_company.autotask_company_id + ")")
+            self.sync_company(tenant_db.name, at_company.autotask_company_id)
 
     def sync_all(self):
         self.app.log.debug("[Autotask plugin] Syning all devices for all tenants")
@@ -1260,6 +1281,7 @@ def full_run(app):
                 autotask.device.sync_tenant(tenant)
             except Exception as e:
                 app.log.error("[Autotask plugin] Function: Device Sync Tenant | Tenant: " + tenant.name + " - " + str(e))
+                app.session.rollback()
 
             # TODO This is too much for every 24 hours. Neeed to create a last sync for each type of sync and configure them based on need
             # TODO Maybe we can do contracts opertunisitly. Meaning we only check for a contract when it's relavant. 

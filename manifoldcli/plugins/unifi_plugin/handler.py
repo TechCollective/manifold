@@ -97,6 +97,7 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
         # Update database
         c = UniFiControllerHandler.controller_api_object(self, controller)
         sites = c.get_sites()
+
         for site in sites:
             self.update_db(site, controller)
         
@@ -124,7 +125,7 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
         """
         
         existing_entry = self.app.session.query(UniFi_Sites).filter_by(name=site['name'], controller_key=controller.primary_key).first()
-        
+
         if existing_entry:
             self.app.log.debug("[UniFi plugin] Syncing Site: " + site['desc'] )
             changed = False
@@ -1270,6 +1271,7 @@ def full_run(app):
         if do_full_run:
             app.log.info("[UniFi plugin] Syncing sites")
             try:
+                # TODO need to test if the controller is up. 
                 unifi.site.sync_all(controller)
             except Exception as e:
                 app.log.error("[UniFi plugin] Site Sync All Error: " + str(e))
