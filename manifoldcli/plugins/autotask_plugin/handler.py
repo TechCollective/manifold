@@ -544,6 +544,7 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
                 ).first()
 
                 if conflicting_record and conflicting_record.primary_key != existing_autotask.primary_key:
+                    # TODO write an exit here to figure out how to fix these.
                     self.app.log.error("[Autotask plugin] Conflicting record found with the same 'autotask_device_id' and 'autotask_company_key'. Skipping update.")
                 else:
                     db_devices.update(device_obj, existing_autotask.parent, "Autotask")
@@ -598,9 +599,12 @@ class AutotaskDeviceHandler(AutotaskDeviceInterface, Handler):
             device (device_obj): all information for the device.
             company (company_obj): all information for the company.
             tenant (tenant_obj): all information for the tenant.
+
         """
         at = AutotaskTenantHandler.tenant_api_object(self, tenant)
-        
+
+        # TODO Check if the device in inactive in Autotask. If it is, reactive it then update it.
+
         self.app.log.debug("[Autotask plugin] Device is not in Autotask. " + str(device))
         self._get_products(tenant)
         # TODO Need somethign better than using the name
@@ -755,11 +759,11 @@ class AutotaskTicketHandler(AutotaskTicketInterface, Handler):
                 autotask.device.post(device_db, company_db, tenant)
 
     def check_issuetypes(self, at, tenant):
-        last_sync = self.app.session.query(Autotask_Cache_Last_Sync).filter_by(name="_autotask_issues").first().last_sync
+        issue_last_sync = self.app.session.query(Autotask_Cache_Last_Sync).filter_by(name="_autotask_issues").first()
         self.app.log.debug("[Autotask plugin] Checking last sync of issues")
-        if last_sync:
+        if issue_last_sync.last_sync:
             self.app.log.debug("[Autotask plugin] last_sync has a value")
-            if last_sync < datetime.datetime.now() - datetime.timedelta(days=7):
+            if issue_last_sync.last_sync < datetime.datetime.now() - datetime.timedelta(days=7):
                 self.app.log.debug("[Autotask plugin] issue types last_sync is old. Syncing now")
                 self.sync_issuetypes(at, tenant)
         else:

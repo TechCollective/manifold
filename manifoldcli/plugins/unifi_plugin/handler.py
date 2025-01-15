@@ -191,11 +191,8 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
 
         if site_ids.find('\n') != -1:
             for site_id in site_ids.split('\n'):
-                # Detects if we are just dealing with Site IDs or the whole url
-                if len(site_id) == 8:
-                    # Only the 8 digit site id. We are assuming it's the first Controller
-                    site_db = self.app.session.query(UniFi_Sites).filter_by(name=site_id, controller_key='1').first()
-                elif len(site_id) == 0:
+                site_db = None
+                if len(site_id) == 0:
                     pass
                 else:
                     site_db = self.get_host_and_port_from_autotask_udf(site_id)
@@ -205,25 +202,16 @@ class UniFiSiteHandler(UniFiSiteInterface, Handler):
                     self.app.session.commit()
                 else:
                     # TODO check last sync and sync unifi sites if it's after sync time.
-                    self.app.log.debug("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
+                    self.app.log.debug("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " Company Key: " + str(company_key) + " But there is not a site in the database.")
         else:
             site_id = site_ids
-            if len(site_id) == 8:
-                # Only the 8 digit site id. We are assuming it's the first Controller
-                site_db = self.app.session.query(UniFi_Sites).filter_by(name=site_id, controller_key='1').first()
-                if site_db:
-                    site_db.parent_id = company_key
-                    self.app.session.commit()
-                else:
-                    # TODO check last sync and sync unifi sites if it's after sync time.
-                    self.app.log.debug("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
+
+            site_db = self.get_host_and_port_from_autotask_udf(site_id)
+            if site_db:
+                site_db.parent_id = company_key
+                self.app.session.commit()
             else:
-                site_db = self.get_host_and_port_from_autotask_udf(site_ids)
-                if site_db:
-                    site_db.parent_id = company_key
-                    self.app.session.commit()
-                else:
-                    self.app.log.debug("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " But there is not a site in the database.")
+                self.app.log.debug("[UniFi plugin] Autotask has a listed Site ID: " + site_id + " Company Key: " + str(company_key) + " But there is not a site in the database.")
 
 class UniFiDeviceHandler(UniFiDeviceInterface, Handler):
     class Meta:
@@ -240,50 +228,108 @@ class UniFiDeviceHandler(UniFiDeviceInterface, Handler):
         controller = self.app.session.query(UniFi_Controllers).filter_by(name=controller_name).first()
         
         c = UniFiControllerHandler.controller_api_object(self, controller)
-
         sites = c.get_sites()
         for site in sites:
             self.app.log.info("[UniFi plugin] Syncing Site: " + site['desc'] + "  ID: " + site['name'])
             self.sync_site(controller.name, site['name'])
 
+    def add_site_devices(self, unifi_controller, unifi_site_db, unifi_devices):
+        c = UniFiControllerHandler.controller_api_object(self, unifi_controller, unifi_site_db.name)
+        for device in unifi_devices:
+            if device.get('serial') is not None and device.get('adopted'):
+                self.update_db(device, unifi_site_db.name, unifi_controller)
+
+                unifi_api = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
+                device_db = self.app.session.query( Devices ).filter_by( serial=device['serial'] ).first()
+                company_db = self.app.session.query( Companies ).filter_by( primary_key=unifi_site_db.parent_id  ).first()
+
+                alert_obj = unifi_api.alert.UniFiAlertObject(
+                    alert_unifi = None,
+                    controller = unifi_controller, 
+                    site_name = unifi_site_db.name,
+                    connection = c,
+                    device_unifi = device,
+                    source_db = self.app.session.query( Sources ).filter_by(plugin_name="UniFi", tenant_key=unifi_controller.primary_key).first(), 
+                    devices=[device_db], 
+                    company_db=company_db
+                )
+                unifi_api.alert.device_alerts(alert_obj)
+
+            elif device.get('serial') is None:
+                # TODO Figure out what to do with these
+                # Not sure what to do with these. I'm guessing that we should generate a ticket to have them removed.
+                # Might be able to use disconnection_reason': "MISSED_INFORM, last_seen '1692203911', considered_lost '1692203921', state: 5", 
+                # Also weird keys. 'anomalies': -1 and 'satisfaction': -1, 
+                # For now skipping
+                self.app.log.warning("[UniFi plugin] Device has no serial number. [Device: " + device['name'] + "]")
+                self.app.log.warning("[UniFi plugin] Device Json: " + str(device))
+            elif device.get('adopted') == False:
+                # Not sure I want to do anything with devices not adapted. Just tagging this in case I do
+                pass
+
+    def delete_missing_site_devices(self, unifi_controller, unifi_site_db, unifi_devices):
+        """
+        Delete devices from the UniFi_Devices table that are no longer in the UniFi controller's site.
+        Trigger a hook for other plugins or systems to clean up associated data, then remove the device
+        from the Devices table.
+
+        Args:
+            unifi_controller: The controller object.
+            unifi_site_db: The UniFi site database object.
+            unifi_devices: The list of devices currently in the UniFi controller for this site.
+        """
+        # Query all devices in the database associated with this site
+        unifi_devices_db = self.app.session.query( UniFi_Devices ).filter_by( unifi_sites_key=unifi_site_db.primary_key )
+
+        for unifi_device_db in unifi_devices_db:
+            # Check if the device exists in the UniFi controller's device list
+            found = False
+            for unifi_device in unifi_devices:
+                if unifi_device["device_id"] == unifi_device_db.unifi_device_id:
+                    found = True
+                    break
+
+            if not found:
+                self.app.log.debug(f"[UniFi plugin] Device is no longer in the site. Removing {unifi_device_db.parent.name} Serial: {unifi_device_db.parent.serial}")
+                # Remove the device from the UniFi_Devices table
+                self.app.session.delete(unifi_device_db)
+                self.app.session.commit()
+
+                # Trigger a hook to notify other plugins/systems
+                self.app.log.debug("[UniFi plugin] Triggering hook for device removal")
+                for res in self.app.hook.run('device_removed', unifi_device_db.parent):
+                    # Hook functions should handle their respective logic
+                    pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
     def sync_site(self, controller_name, site_id):
-        controller = self.app.session.query(UniFi_Controllers).filter_by(name=controller_name).first()
-        unifi_site_db = self.app.session.query( UniFi_Sites ).filter_by( name=site_id, controller_key=controller.primary_key  ).first()
-        c = UniFiControllerHandler.controller_api_object(self, controller, site_id)
+        unifi_controller = self.app.session.query(UniFi_Controllers).filter_by(name=controller_name).first()
+        unifi_site_db = self.app.session.query( UniFi_Sites ).filter_by( name=site_id, controller_key=unifi_controller.primary_key  ).first()
+        c = UniFiControllerHandler.controller_api_object(self, unifi_controller, site_id)
 
         if unifi_site_db.parent_id:
-            devices = c.get_aps()
-            for device in devices:
-                if device.get('serial') is not None and device.get('adopted'):
-                    self.update_db(device, site_id, controller)
-
-                    unifi_api = self.app.handler.get('unifi_interface', 'unifi_api', setup=True)
-                    device_db = self.app.session.query( Devices ).filter_by( serial=device['serial'] ).first()
-                    company_db = self.app.session.query( Companies ).filter_by( primary_key=unifi_site_db.parent_id  ).first()
-
-                    alert_obj = unifi_api.alert.UniFiAlertObject(
-                        alert_unifi = None,
-                        controller = controller, 
-                        site_name = site_id,
-                        connection = c,
-                        device_unifi = device,
-                        source_db = self.app.session.query( Sources ).filter_by(plugin_name="UniFi", tenant_key=controller.primary_key).first(), 
-                        devices=[device_db], 
-                        company_db=company_db
-                    )
-                    unifi_api.alert.device_alerts(alert_obj)
-
-                elif device.get('serial') is None:
-                    # TODO Figure out what to do with these
-                    # Not sure what to do with these. I'm guessing that we should generate a ticket to have them removed.
-                    # Might be able to use disconnection_reason': "MISSED_INFORM, last_seen '1692203911', considered_lost '1692203921', state: 5", 
-                    # Also weird keys. 'anomalies': -1 and 'satisfaction': -1, 
-                    # For now skipping
-                    self.app.log.warning("[UniFi plugin] Device has no serial number. [Device: " + device['name'] + "]")
-                    self.app.log.warning("[UniFi plugin] Device Json: " + str(device))
-                elif device.get('adopted') == False:
-                    # Not sure I want to do anything with devices not adapted. Just tagging this in case I do
-                    pass
+            unifi_devices = c.get_aps()
+            self.add_site_devices(unifi_controller, unifi_site_db, unifi_devices)
+            self.delete_missing_site_devices(unifi_controller, unifi_site_db, unifi_devices)
         else:
             self.app.log.warning("[UniFi plugin] Site: " + unifi_site_db.desc + " is not assoicated with a company. Skipping.")
 

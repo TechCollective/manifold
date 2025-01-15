@@ -22,24 +22,41 @@ class DBDevicesHandler(DBInterface, Handler):
         if device_obj.company:
             device_db.company_key = device_obj.company
         else:
-            self.app.log.error("device is not assoicated with a company!")
+            self.app.log.error("[Manifold] Device is not assoicated with a company!")
             self.app.log.error(device_obj)
             sys.exit()
         if device_obj.source:
             device_db.source = device_obj.source
         else:
-            self.app.log.error("device is not assoicated with a source!")
+            self.app.log.error("[Manifold] Device is not assoicated with a source!")
             self.app.log.error(device_obj)
             sys.exit()
 
-        self.app.session.add(device_db)
-        self.app.session.commit()
-        self.run_hook(device_db, source)
+        if device_obj.serial:
+            self.app.session.add(device_db)
+            self.app.session.commit()
+            self.run_hook(device_db, source)
+        else:
+            self.app.log.error("[Manifold] Not adding device to database because it has no serial number!")
         return device_db
 
     def delete(self, device_obj, source):
         # TODO check with other sources to see if it's still being used
-        pass
+
+        # Check if the device exists in the Devices table
+        device_db = self.app.session.query(Devices).filter_by(serial=device_obj.serial).first()
+
+        if device_db:
+            # Trigger a hook to notify other plugins/systems
+            self.app.log.debug("[UniFi plugin] Triggering hook for device removal")
+            for res in self.app.hook.run('device_removed', device_db):
+                # Hook functions should handle their respective logic
+                pass
+
+            # Delete from Device DB
+            self.app.log.debug(f"[UniFi plugin] Removing device from Devices table: {device_db.name}")
+            self.app.session.delete(device_db)
+            self.app.session.commit()
 
     def update(self, device_obj, device_db, source):
         if device_db is None:
