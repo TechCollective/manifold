@@ -3,10 +3,11 @@ name = "manifold"
 version = "0.1.0"
 description = "Unified CLI/Web sync tool for Autotask, UniFi, and more"
 authors = ["Jeffrey Brite <jeff@techcollective.com>"]
+
 packages = [
-    { include = "manifold_core" },
-    { include = "manifold_cli" },
-    { include = "manifold_web" }
+    { include = "manifold_core", from = "src" },
+    { include = "manifold_cli", from = "src" },
+    { include = "manifold_web", from = "src" }
 ]
 
 [tool.poetry.dependencies]
@@ -25,9 +26,6 @@ alembic = "^1.15.2"
 pyunifi = { git = "https://github.com/TechCollective/pyunifi.git", rev = "master" }
 requests = "^2.32.3"
 
-
-
-
 [tool.poetry.scripts]
 manifold = "manifold_cli.main:app"
 
@@ -45,3 +43,4 @@ profile = "black"
 
 [tool.mypy]
 strict = true
+
