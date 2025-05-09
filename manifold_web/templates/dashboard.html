@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Manifold{% endblock %}
+
+{% block content %}
+<h2>System Status Overview</h2>
+
+<div class="stats-container">
+    <div class="stat-card">
+        <h3>Autotask</h3>
+        <p>Status: <span class="status-indicator success">Connected</span></p>
+        <p>Last Sync: 5 mins ago</p>
+    </div>
+
+    <div class="stat-card">
+        <h3>UniFi</h3>
+        <p>Status: <span class="status-indicator warning">Degraded</span></p>
+        <p>Last Sync: 22 mins ago</p>
+    </div>
+
+    <div class="stat-card">
+        <h3>JumpCloud</h3>
+        <p>Status: <span class="status-indicator success">Connected</span></p>
+        <p>Last Sync: 2 mins ago</p>
+    </div>
+</div>
+
+<h2 class="tab">Quick Commands</h2>
+
+<div class="commands-section">
+    <button class="command-button"><i class="fa-solid fa-rotate-right"></i> Sync All</button>
+    <button class="command-button"><i class="fa-solid fa-circle-plus"></i> Add User</button>
+    <button class="command-button"><i class="fa-solid fa-triangle-exclamation"></i> Run Diagnostics</button>
+</div>
+{% endblock %}

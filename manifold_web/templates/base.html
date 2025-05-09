@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}Manifold{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class="flashes">
+            {% for category, message in messages %}
+                <li class="flash-{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+    <div class="layout">
+        <!-- Title Bar -->
+        <header class="title-bar">
+            <h1>Manifold</h1>
+        </header>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="nav-item">
+                <div class="nav-header">
+                    <span><i class="fa-solid fa-house"></i> Home</span>
+                </div>
+                <div class="nav-submenu active">
+                    <div class="nav-submenu-item"><a href="/">Overview</a></div>
+                    <div class="nav-submenu-item"><a href="/dashboard">Dashboard</a></div>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <div class="nav-header">
+                    <span><i class="fa-solid fa-network-wired"></i> Integrations</span>
+                </div>
+                <div class="nav-submenu active">
+                    <div class="nav-submenu-item"><a href="/autotask">Autotask</a></div>
+                    <div class="nav-submenu-item"><a href="/unifi">UniFi</a></div>
+                    <div class="nav-submenu-item"><a href="/jumpcloud">JumpCloud</a></div>
+                </div>
+            </div>
+
+            {% if auth_enabled %}
+            <div class="nav-item">
+                <div class="nav-header">
+                    <span><i class="fa-solid fa-right-from-bracket"></i> <a href="/logout">Logout</a></span>
+                </div>
+            </div>
+            {% endif %}
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,9 @@
+# Used by Flask app
+FLASK_SECRET=dev-super-secret-key
+
+# JumpCloud OIDC config
+JUMPCLOUD_CLIENT_ID=your-jumpcloud-client-id
+JUMPCLOUD_CLIENT_SECRET=your-jumpcloud-client-secret
+
+# Set secret backend plugin
+MANIFOLD_SECRETS_BACKEND=dotenv

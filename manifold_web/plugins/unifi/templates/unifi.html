@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}UniFi Servers | Manifold{% endblock %}
+
+{% block content %}
+
+<h2>UniFi Network Servers</h2>
+<form id="sync-sites-form" method="POST" action="/unifi/sync-sites" style="display:none;"></form>
+<form id="sync-devices-form" method="POST" action="/unifi/sync-devices" style="display:none;">
+    <input type="hidden" name="server_id" id="sync-devices-server-id">
+</form>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Host</th>
+            <th>Port</th>
+            <th>Credentials</th>
+            <th>
+                Actions
+                <div class="kabob-container" id="kabob-global">
+                    <button class="kabob-button" onclick="toggleKabobMenu('global')">⋮</button>
+                    <div class="kabob-menu hidden">
+                        <a href="#" onclick="showAddServerModal()">Add Server</a>
+                        <a href="#" onclick="refreshServerList()">Refresh</a>
+                        <a href="#" onclick="showAllSites()">Display All Sites</a>
+                        <a href="#" onclick="submitSyncDevices()">Sync All Devices</a>
+                        <a href="#" onclick="openLookupModal()">Lookup Device</a>
+                    </div>
+                </div>
+            </th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for server in unifi_servers %}
+        <tr>
+            <td>{{ server.name }}</td>
+            <td>{{ server.host }}</td>
+            <td>{{ server.port }}</td>
+            <td>{{ '✔' if server.has_credentials else '✘' }}</td>
+            <td>
+                <div class="kabob-container" id="kabob-{{ server.id }}">
+                    <button class="kabob-button" onclick="toggleKabobMenu('{{ server.id }}')">⋮</button>
+                    <div class="kabob-menu hidden">
+                        <a href="/unifi/{{ server.id }}/edit">Edit</a>
+                        <a href="/unifi/{{ server.id }}/delete">Delete</a>
+                        <a href="/unifi/{{ server.id }}/add-credentials">Add Credentials</a>
+                        <a href="#" onclick="fetchSites({{ server.id }}, '{{ server.name }}')">Display Sites</a>
+                        <a href="#" onclick="submitSyncSites()">Sync Sites</a>
+                        <a href="#" onclick="submitSyncDevices({{ server.id }})">Sync Devices</a>
+                    </div>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Modals for Add/Edit/Creds and Site Info -->
+<div id="lookup-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Lookup Device</h3>
+        <span class="close" onclick="hideLookupModal()">&times;</span>
+        <form id="lookup-form" onsubmit="submitDeviceLookup(event)">
+            <input type="text" id="lookup-identifier" placeholder="Enter MAC or Serial" required>
+            <button type="submit" class="command-button">Lookup</button>
+        </form>
+        <pre id="lookup-results" style="white-space: pre-wrap; margin-top: 1em;"></pre>
+        
+    </div>
+</div>
+
+
+{% include 'unifi_modals.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleKabobMenu(id) {
+    document.querySelectorAll('.kabob-menu').forEach(menu => menu.classList.add('hidden'));
+    const container = document.getElementById(`kabob-${id}`);
+    const menu = container.querySelector('.kabob-menu');
+    menu.classList.toggle('hidden');
+}
+
+document.addEventListener("click", function (event) {
+    if (!event.target.classList.contains("kabob-button")) {
+        document.querySelectorAll('.kabob-menu').forEach(menu => menu.classList.add('hidden'));
+    }
+});
+
+function fetchSites(serverId, serverName) {
+    fetch(`/unifi/${serverId}/sites`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Failed to fetch sites");
+            }
+            return response.json();
+        })
+        .then(data => {
+            showSitesModal(serverName, data);
+        })
+        .catch(err => {
+            alert("Error: " + err.message);
+        });
+}
+
+function showAllSites() {
+    fetchSites("all", "All Servers");
+}
+
+function submitSyncSites() {
+    document.getElementById("sync-sites-form").submit();
+}
+
+function submitSyncDevices(serverId = "") {
+    const input = document.getElementById("sync-devices-server-id");
+    input.value = serverId;
+    document.getElementById("sync-devices-form").submit();
+}
+
+function openLookupModal() {
+    document.getElementById("lookup-modal").classList.remove("hidden");
+    document.getElementById("lookup-identifier").value = "";
+    document.getElementById("lookup-results").textContent = "";
+}
+
+function hideLookupModal() {
+    document.getElementById("lookup-modal").classList.add("hidden");
+}
+
+function submitDeviceLookup(event) {
+    event.preventDefault();  // prevent page reload
+
+    const input = document.getElementById("lookup-identifier");
+    const identifier = input.value.trim();
+
+    fetch("/unifi/lookup-device", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ identifier: identifier })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("Server error: " + response.status);
+        }
+        return response.json();
+    })
+    .then(data => {
+        const results = document.getElementById("lookup-results");
+
+        if (data.error) {
+            results.textContent = "Error: " + data.error;
+        } else {
+            const result = `
+Server: ${data.server}
+Site: ${data.site}
+Name: ${data.name}
+Model: ${data.model}
+Serial: ${data.serial}
+MACs: ${data.macs.join(", ")}
+IPs: ${data.ips.join(", ")}
+Last Seen: ${data.last_seen}
+Uptime: ${data.uptime}
+State: ${data.state}`;
+            results.textContent = result;
+        }
+    })
+    .catch(err => {
+        document.getElementById("lookup-results").textContent = "Error: " + err.message;
+    });
+}
+
+
+</script>
+{% endblock %}

@@ -1,0 +1,60 @@
+<!-- templates/unifi_modals.html -->
+
+<!-- Display Sites Modal -->
+<div id="sites-modal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="hideSitesModal()">&times;</span>
+        <h3>Sites for <span id="sites-modal-title">...</span></h3>
+        <table class="styled-table" id="sites-table">
+            <thead>
+                <tr>
+                    <th>Site Name</th>
+                    <th>Description</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody id="sites-table-body">
+                <!-- Populated via JavaScript -->
+            </tbody>
+        </table>
+        <div class="modal-actions">
+            <button onclick="hideSitesModal()" class="command-button">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showSitesModal(serverName, sites) {
+    document.getElementById("sites-table-body").innerHTML = "<tr><td>TEST</td><td>test</td><td>test</td></tr>";
+    console.log("Modal called with serverName:", serverName);
+    console.log("Sites:", sites);
+    document.getElementById("sites-modal-title").textContent = serverName;
+    const tbody = document.getElementById("sites-table-body");
+    tbody.innerHTML = "";
+
+    if (sites.length === 0) {
+        const row = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 3;
+        td.textContent = "No sites found.";
+        row.appendChild(td);
+        tbody.appendChild(row);
+    } else {
+        for (const site of sites) {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${site.name}</td>
+                <td>${site.desc || ""}</td>
+                <td>${site.role || ""}</td>
+            `;
+            tbody.appendChild(row);
+        }
+    }
+
+    document.getElementById("sites-modal").classList.remove("hidden");
+}
+
+function hideSitesModal() {
+    document.getElementById("sites-modal").classList.add("hidden");
+}
+</script>
