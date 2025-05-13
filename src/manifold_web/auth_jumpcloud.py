@@ -2,7 +2,8 @@ from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, redirect, url_for, session, request
 import os
 
-auth_bp = Blueprint("auth", __name__)
+auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
 oauth = OAuth()
 
 def init_oauth(app):
@@ -17,10 +18,11 @@ def init_oauth(app):
 
 @auth_bp.route("/login")
 def login():
-    redirect_uri = url_for("auth.callback", _external=True)
+    redirect_uri = "https://manifold.techcollective.com/callback"
+    
     return oauth.jumpcloud.authorize_redirect(redirect_uri)
 
-@auth_bp.route("/callback")
+@auth_bp.route("/callback", endpoint="callback")
 def callback():
     token = oauth.jumpcloud.authorize_access_token()
     user = oauth.jumpcloud.parse_id_token(token)

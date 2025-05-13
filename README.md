@@ -32,3 +32,25 @@ Bitwarden Secerts Plugin
 If you are going to use the bitwarden secerts plugin.
 wget https://github.com/bitwarden/sdk-sm/releases/download/bws-v1.0.0/bws-x86_64-unknown-linux-gnu-1.0.0.zip
 unzip and put the file in /usr/local/bin
+
+
+Create a server file
+/etc/systemd/system/manifold.service
+
+[Unit]
+Description="Manifold - Autotask UniFi Alert Sync"
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/manifold/
+Environment=FLASK_APP=manifold_web.app
+Environment=PYTHONPATH=/opt/manifold/src
+ExecStart=/opt/manifold-venv/bin/flask run --host=127.0.0.1 --port=5000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+

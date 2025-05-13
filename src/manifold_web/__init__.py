@@ -1,33 +1,60 @@
 import os
 from flask import Flask
 from flask_session import Session
+from flask_session.sessions import FileSystemSessionInterface
+from authlib.integrations.flask_client import OAuth
 
+from manifold_web.routes.auth import auth_bp
 from manifold_web.routes.dashboard import dashboard_bp
 from manifold_web.plugins.unifi.routes import unifi_bp
 
 from dotenv import load_dotenv
 load_dotenv()
 
-def create_app():
-    app = Flask(__name__)
-    app.secret_key = os.getenv("FLASK_SECRET", "dev-secret")
-    app.config["SESSION_TYPE"] = "filesystem"
 
+class PatchedFileSystemSessionInterface(FileSystemSessionInterface):
+    def save_session(self, app, session, response):
+        session_id = session.sid
+        if isinstance(session_id, bytes):
+            session_id = session_id.decode("utf-8")
+        response.set_cookie(app.config["SESSION_COOKIE_NAME"], session_id)
+        super().save_session(app, session, response)
+
+def create_app():
+    app = Flask(__name__, template_folder="templates", static_folder="static")
+    app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret")
+
+    # File-based session configuration
+    session_dir = os.getenv("SESSION_FILE_DIR", "/opt/manifold/flask_session")
+    os.makedirs(session_dir, exist_ok=True)
+    app.config.update(
+        SESSION_TYPE="filesystem",
+        SESSION_FILE_DIR=session_dir,
+        SESSION_PERMANENT=False,
+        SESSION_COOKIE_NAME="manifold_session",
+    )
+    app.session_interface = PatchedFileSystemSessionInterface(
+        cache_dir=session_dir,
+        threshold=500,
+        mode=0o600,
+        key_prefix=""
+    )
     Session(app)
 
-    # Only register auth routes if needed
-    auth_backend = os.getenv("MANIFOLD_AUTH_BACKEND", "jumpcloud")
+    # Configure OIDC with JumpCloud's oauth.id domain
+    oauth = OAuth(app)
+    oauth.register(
+        name="jumpcloud",
+        client_id=os.getenv("OIDC_CLIENT_ID"),
+        client_secret=os.getenv("OIDC_CLIENT_SECRET"),
+        server_metadata_url="https://oauth.id.jumpcloud.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid profile email"},
+    )
+    app.oauth = oauth
 
-    if auth_backend != "none":
-        from manifold_web.auth_jumpcloud import auth_bp, init_oauth
-        init_oauth(app)
-        app.register_blueprint(auth_bp)
-
+    # Register routes
+    app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
-    from manifold_web.plugins.unifi.routes import unifi_bp
-    from manifold_web.plugins import unifi
-    unifi.register_plugin(app)
-       
+    app.register_blueprint(unifi_bp)
     
     return app
-
