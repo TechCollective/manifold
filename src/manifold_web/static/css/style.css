@@ -68,6 +68,17 @@
     display: none;
 }
 
+.nav-submenu-item a {
+    color: white;
+}
+
+/* Optional: Add hover/focus state for better accessibility */
+.nav-submenu-item a:hover,
+.nav-submenu-item a:focus {
+    color: #ddd;
+}
+
+
 .nav-submenu.active {
     display: block;
 }

@@ -7,7 +7,7 @@ run-cli:
 	poetry run manifold $(ARGS)
 
 run-web:
-	FLASK_APP=manifold_web/app.py FLASK_ENV=development poetry run flask run
+	FLASK_APP=manifold_web.app FLASK_ENV=development poetry run flask run
 
 test:
 	poetry run pytest -v

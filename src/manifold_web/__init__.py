@@ -8,6 +8,8 @@ from manifold_web.routes.auth import auth_bp
 from manifold_web.routes.dashboard import dashboard_bp
 from manifold_web.plugins.unifi.routes import unifi_bp
 
+from manifold_core.secrets.bitwarden.backend import Backend
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -25,7 +27,7 @@ def create_app():
     app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret")
 
     # File-based session configuration
-    session_dir = os.getenv("SESSION_FILE_DIR", "/opt/manifold/flask_session")
+    session_dir = os.getenv("SESSION_DIR", os.path.expanduser("~/manifold_sessions"))
     os.makedirs(session_dir, exist_ok=True)
     app.config.update(
         SESSION_TYPE="filesystem",
@@ -45,8 +47,8 @@ def create_app():
     oauth = OAuth(app)
     oauth.register(
         name="jumpcloud",
-        client_id=os.getenv("OIDC_CLIENT_ID"),
-        client_secret=os.getenv("OIDC_CLIENT_SECRET"),
+        client_id = Backend().get_secret("OIDC_CLIENT_ID"),
+        client_secret=Backend().get_secret("OIDC_CLIENT_SECRET"),
         server_metadata_url="https://oauth.id.jumpcloud.com/.well-known/openid-configuration",
         client_kwargs={"scope": "openid profile email"},
     )

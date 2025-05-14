@@ -1,9 +1,17 @@
 # Used by Flask app
 FLASK_SECRET=dev-super-secret-key
 
-# JumpCloud OIDC config
-JUMPCLOUD_CLIENT_ID=your-jumpcloud-client-id
-JUMPCLOUD_CLIENT_SECRET=your-jumpcloud-client-secret
+BASE_URL=https://manifold.example.com
+
+AUTH_MODE=NO_AUTH
 
 # Set secret backend plugin
-MANIFOLD_SECRETS_BACKEND=dotenv
+MANIFOLD_SECRETS_BACKEND=bitwarden
+BW_ACCESS_TOKEN=****************************
+BW_PROJECT_ID=******************************
+
+debug = os.getenv("BW_DEBUG") == "1"
+helper = BitwardenHelper(debug=debug)
+
+#Jumpcloud
+#SESSION_DIR=/opt/manifold/flask_session

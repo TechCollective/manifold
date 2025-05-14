@@ -1,10 +1,23 @@
-from flask import Blueprint, redirect, url_for, session, current_app
+from flask import Blueprint, redirect, url_for, session, current_app, request
 import os
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
+AUTH_MODE = os.getenv("AUTH_MODE", "JUMPCLOUD_AUTH")
 
 auth_bp = Blueprint("auth", __name__)
+
+def login_required(view_func):
+    """Decorator that enforces login only if AUTH_MODE is set to JUMPCLOUD_AUTH"""
+    def wrapped_view(*args, **kwargs):
+        if AUTH_MODE == "NO_AUTH":
+            return view_func(*args, **kwargs)
+        if 'user' not in session:
+            return redirect(url_for('login', next=request.url))
+        return view_func(*args, **kwargs)
+    wrapped_view.__name__ = view_func.__name__
+    return wrapped_view
+
 
 @auth_bp.route("/login")
 def login():

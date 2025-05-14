@@ -3,63 +3,107 @@
 
 <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Manifold{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .skip-link {
+            position: absolute;
+            left: -999px;
+            top: auto;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+        .skip-link:focus {
+            position: static;
+            width: auto;
+            height: auto;
+            background: #fff;
+            color: #000;
+            padding: 0.5rem;
+            z-index: 1000;
+        }
+        :focus-visible {
+            outline: 2px solid #000;
+        }
+    </style>
 </head>
+
 <body>
+    <!-- Skip link for keyboard users -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <ul class="flashes">
-            {% for category, message in messages %}
-                <li class="flash-{{ category }}">{{ message }}</li>
-            {% endfor %}
+            <ul class="flashes" role="alert" aria-live="polite">
+                {% for category, message in messages %}
+                    <li class="flash-{{ category }}">{{ message }}</li>
+                {% endfor %}
             </ul>
         {% endif %}
     {% endwith %}
+
     <div class="layout">
         <!-- Title Bar -->
         <header class="title-bar">
             <h1>Manifold</h1>
         </header>
 
-        <!-- Sidebar -->
+        <!-- Sidebar Navigation -->
         <aside class="sidebar">
-            <div class="nav-item">
-                <div class="nav-header">
-                    <span><i class="fa-solid fa-house"></i> Home</span>
+            <nav aria-label="Primary navigation">
+                <div class="nav-item">
+                    <div class="nav-header">
+                        <span><i class="fa-solid fa-house" aria-hidden="true"></i> Home</span>
+                    </div>
+                    <div class="nav-submenu active">
+                        <div class="nav-submenu-item">
+                            <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %}>Overview</a>
+                        </div>
+                        <div class="nav-submenu-item">
+                            <a href="/dashboard" {% if request.path == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+                        </div>
+                    </div>
                 </div>
-                <div class="nav-submenu active">
-                    <div class="nav-submenu-item"><a href="/">Overview</a></div>
-                    <div class="nav-submenu-item"><a href="/dashboard">Dashboard</a></div>
-                </div>
-            </div>
 
-            <div class="nav-item">
-                <div class="nav-header">
-                    <span><i class="fa-solid fa-network-wired"></i> Integrations</span>
+                <div class="nav-item">
+                    <div class="nav-header">
+                        <span><i class="fa-solid fa-network-wired" aria-hidden="true"></i> Integrations</span>
+                    </div>
+                    <div class="nav-submenu active">
+                        <div class="nav-submenu-item">
+                            <a href="/autotask" {% if request.path == '/autotask' %}aria-current="page"{% endif %}>Autotask</a>
+                        </div>
+                        <div class="nav-submenu-item">
+                            <a href="/unifi" {% if request.path == '/unifi' %}aria-current="page"{% endif %}>UniFi</a>
+                        </div>
+                        <div class="nav-submenu-item">
+                            <a href="/jumpcloud" {% if request.path == '/jumpcloud' %}aria-current="page"{% endif %}>JumpCloud</a>
+                        </div>
+                    </div>
                 </div>
-                <div class="nav-submenu active">
-                    <div class="nav-submenu-item"><a href="/autotask">Autotask</a></div>
-                    <div class="nav-submenu-item"><a href="/unifi">UniFi</a></div>
-                    <div class="nav-submenu-item"><a href="/jumpcloud">JumpCloud</a></div>
-                </div>
-            </div>
 
-            {% if auth_enabled %}
-            <div class="nav-item">
-                <div class="nav-header">
-                    <span><i class="fa-solid fa-right-from-bracket"></i> <a href="/logout">Logout</a></span>
+                {% if auth_enabled %}
+                <div class="nav-item">
+                    <div class="nav-header">
+                        <span>
+                            <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                            <a href="/logout">Logout</a>
+                        </span>
+                    </div>
                 </div>
-            </div>
-            {% endif %}
+                {% endif %}
+            </nav>
         </aside>
 
         <!-- Main Content Area -->
-        <main class="content">
+        <main class="content" id="main-content">
             {% block content %}{% endblock %}
         </main>
     </div>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>
