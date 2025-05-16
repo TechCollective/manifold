@@ -27,11 +27,17 @@ def login():
 
 @auth_bp.route("/callback")
 def callback():
-    print("[DEBUG] /callback hit")
-    token = current_app.oauth.jumpcloud.authorize_access_token()
-    user_info = current_app.oauth.jumpcloud.userinfo(token=token)
-    session["user"] = user_info
-    return redirect(url_for("dashboard.home"))
+    try:
+        print("[DEBUG] /callback hit")
+        token = current_app.oauth.jumpcloud.authorize_access_token()
+        print(f"[DEBUG] Token: {token}")
+        user_info = current_app.oauth.jumpcloud.userinfo(token=token)
+        print(f"[DEBUG] User info: {user_info}")
+        session["user"] = user_info
+        return redirect(url_for("dashboard.home"))
+    except Exception as e:
+        print(f"[ERROR] Callback failed: {e}")
+        return "Authentication failed", 500
 
 @auth_bp.route("/logout")
 def logout():
