@@ -27,7 +27,8 @@ def create_app():
     app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret")
 
     # File-based session configuration
-    session_dir = os.getenv("SESSION_DIR", os.path.expanduser("~/manifold_sessions"))
+    session_dir = os.getenv("SESSION_DIR", "/opt/manifold/sessions")
+
     os.makedirs(session_dir, exist_ok=True)
     app.config.update(
         SESSION_TYPE="filesystem",

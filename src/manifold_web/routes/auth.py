@@ -13,7 +13,7 @@ def login_required(view_func):
         if AUTH_MODE == "NO_AUTH":
             return view_func(*args, **kwargs)
         if 'user' not in session:
-            return redirect(url_for('login', next=request.url))
+            return redirect(url_for('auth.login', next=request.url))
         return view_func(*args, **kwargs)
     wrapped_view.__name__ = view_func.__name__
     return wrapped_view
