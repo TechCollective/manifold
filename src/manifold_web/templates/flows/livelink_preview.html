@@ -67,6 +67,18 @@
     🔄 Redirecting user to Slack Channel
   </div>
 
+  {% if ticket.userDefinedFields %}
+    <div class="step">
+      <strong>Raw userDefinedFields:</strong>
+      <pre>{{ ticket.userDefinedFields | tojson(indent=2) }}</pre>
+    </div>
+  {% else %}
+    <div class="step failed">
+      No userDefinedFields found on ticket.
+    </div>
+  {% endif %}
+
+
   {% if slack_id %}
     <meta http-equiv="refresh" content="0;url=https://slack.com/app_redirect?channel={{ slack_id }}">
   {% endif %}
