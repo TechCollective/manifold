@@ -1,5 +1,6 @@
 from manifold_core.plugins.autotask.models import AutotaskIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
+import requests
 
 
 class AutotaskAPI:
@@ -34,3 +35,25 @@ class AutotaskAPI:
             return bool(username and secret)
         except Exception:
             return False
+
+    def get_ticket(self, ticket_id: str) -> dict:
+        """Fetch ticket details from Autotask by ID."""
+        username, secret = self._get_credentials()
+        integration_code = self.secrets.get_secret(
+            f"autotask:{self.integration.name}:integration_code"
+        )
+
+        url = f"{self.integration.api_url}/tickets/{ticket_id}"
+        headers = {
+            "Content-Type": "application/json",
+            "ApiIntegrationcode": integration_code,
+            "UserName": username,
+            "Secret": secret
+        }
+
+        response = requests.get(url, headers=headers)
+
+        if response.status_code != 200:
+            raise Exception(f"Autotask API error: {response.status_code} - {response.text}")
+
+        return response.json()
