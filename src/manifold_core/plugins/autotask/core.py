@@ -137,16 +137,17 @@ def update_ticket_udf(integration_id: int, ticket_id: int, field_name: str, valu
 
     client = AutotaskAPI(integration)._build_client()
 
-    update_payload = {
-        "id": ticket_id,
-        "userDefinedFields": [
-            {
-                "name": field_name,
-                "value": value
-            }
-        ]
-    }
+    udf = []
+    udf.append({'name': field_name, 'value': value})
+    params_udf = {'userDefinedFields': udf}
+    params = { "id": ticket_id}
+    params.update(params_udf)
 
-    result = client.update("Tickets", update_payload)
+
+    try:
+        result = client._update("Tickets", params)
+    except Exception as e:
+        raise Exception(f"Autotask update failed: {e}")
+
     if not result or not result[0].get("id") == ticket_id:
         raise Exception("Failed to update Autotask ticket UDF")
