@@ -1,9 +1,9 @@
-from manifold_core.plugins.autotask.models import AutotaskIntegration
+from manifold_core.plugins.autotask.models import AutotaskIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
 
 
 class AutotaskAPI:
-    def __init__(self, integration: AutotaskIntegration):
+    def __init__(self, integration: AutotaskIntegrationDB):
         self.integration = integration
         self.secrets = get_secret_backend()
 
