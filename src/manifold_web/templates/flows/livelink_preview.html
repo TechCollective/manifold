@@ -4,81 +4,63 @@
   <meta charset="UTF-8">
   <title>Manifold Autotask Slack Bridge</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  {% if slack_id %}
-    <meta http-equiv="refresh" content="0;url=https://slack.com/app_redirect?channel={{ slack_id }}">
-  {% endif %}
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 2rem;
-      background-color: #f9f9f9;
-      color: #333;
-    }
-
-    .title {
-      font-size: 2rem;
-      font-weight: bold;
-      margin-bottom: 2rem;
-    }
-
-    .step {
-      padding: 1rem;
-      margin-bottom: 1rem;
-      border-left: 6px solid #ccc;
-      background: white;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-    }
-
-    .step.complete {
-      border-color: #4caf50;
-      background-color: #e8f5e9;
-    }
-
-    .step.in-progress {
-      border-color: #2196f3;
-      background-color: #e3f2fd;
-    }
-
-    .step.failed {
-      border-color: #f44336;
-      background-color: #ffebee;
-    }
-
-    .footer {
-      margin-top: 2rem;
-      font-size: 0.9rem;
-      color: #666;
-    }
+    body { font-family: sans-serif; padding: 2rem; background: #f9f9f9; }
+    .title { font-size: 2rem; font-weight: bold; margin-bottom: 2rem; }
+    .step { padding: 1rem; margin-bottom: 1rem; background: #fff; border-left: 5px solid #ccc; }
+    .complete { border-color: #4caf50; background: #e8f5e9; }
+    .in-progress { border-color: #2196f3; background: #e3f2fd; }
+    .failed { border-color: #f44336; background: #ffebee; }
+    code { background: #eee; padding: 2px 4px; }
   </style>
 </head>
 <body>
   <div class="title">Manifold Autotask Slack Bridge</div>
 
-  <div class="step complete">
-    ✅ Looking up Ticket
-    {% if ticket_id %}
-      <div><strong>Ticket ID:</strong> {{ ticket_id }}</div>
-      <div><strong>Ticket Number:</strong> {{ ticket_number }}</div>
-      <div><strong>Description:</strong> {{ ticket_description }}</div>
-    {% else %}
-      <div>Ticket details loading or not available.</div>
-    {% endif %}
+  <div id="steps">
+    <div id="step1" class="step in-progress">🔄 Looking up Ticket...</div>
+    <div id="step2" class="step">🔄 Looking up Slack Channel...</div>
+    <div id="step3" class="step">⏳ Redirecting to Slack (if applicable)...</div>
   </div>
 
-  <div class="step {{ 'complete' if slack_id else 'failed' }}">
-    {% if slack_id %}
-      ✅ Slack Channel Found: <code>{{ slack_id }}</code>
-    {% else %}
-      ⚠️ No Slack Channel ID found in user-defined fields.
-    {% endif %}
-  </div>
+  <script>
+    async function runFlow() {
+      const params = new URLSearchParams(window.location.search);
+      const ticketID = params.get("ticketID");
 
-  <div class="step in-progress">
-    🔄 Redirecting user to Slack Channel...
-  </div>
+      const integrationID = {{ integration_id }};
+      const response = await fetch(`/flows/api/livelink/${integrationID}?ticketID=${ticketID}`);
+      const step1 = document.getElementById("step1");
+      const step2 = document.getElementById("step2");
+      const step3 = document.getElementById("step3");
 
-  <div class="footer">
-    Logged in as: {{ email }}
-  </div>
+      if (!response.ok) {
+        step1.className = "step failed";
+        step1.textContent = "❌ Failed to fetch ticket.";
+        return;
+      }
+
+      const data = await response.json();
+      const { ticket, slack_id } = data;
+
+      step1.className = "step complete";
+      step1.innerHTML = `✅ Ticket Found: <code>${ticket.ticketNumber}</code><br>${ticket.description}`;
+
+      if (slack_id) {
+        step2.className = "step complete";
+        step2.innerHTML = `✅ Slack Channel ID Found: <code>${slack_id}</code>`;
+        step3.className = "step in-progress";
+        step3.textContent = "🔄 Redirecting now...";
+        window.location.href = `https://slack.com/app_redirect?channel=${slack_id}`;
+      } else {
+        step2.className = "step failed";
+        step2.textContent = "⚠️ Slack Channel ID not found in user-defined fields.";
+        step3.className = "step failed";
+        step3.textContent = "❌ Cannot redirect — no Slack Channel ID.";
+      }
+    }
+
+    runFlow();
+  </script>
 </body>
 </html>
