@@ -27,46 +27,57 @@
     async function runFlow() {
       const params = new URLSearchParams(window.location.search);
       const ticketID = params.get("ticketID");
-
       const integrationID = {{ integration_id }};
-      const response = await fetch(`/flows/api/livelink/${integrationID}?ticketID=${ticketID}`);
       const step1 = document.getElementById("step1");
       const step2 = document.getElementById("step2");
       const step3 = document.getElementById("step3");
-      const data = await response.json();
-      const { ticket, slack_id, slack_error } = data;
-
-      if (!response.ok) {
+  
+      console.log("Starting LiveLink Flow", { integrationID, ticketID });
+  
+      try {
+        const response = await fetch(`/flows/api/livelink/${integrationID}?ticketID=${ticketID}`);
+        console.log("Response status:", response.status);
+  
+        const data = await response.json();
+        console.log("API Response:", data);
+  
+        const { ticket, slack_id, slack_error } = data;
+  
+        if (data.error) {
+          step1.className = "step failed";
+          step1.textContent = `❌ ${data.error}`;
+          return;
+        }
+  
+        step1.className = "step complete";
+        step1.innerHTML = `✅ Ticket Found: <code>${ticket.ticketNumber}</code><br>${ticket.description}`;
+  
+        if (slack_error) {
+          step2.className = "step failed";
+          step2.textContent = `❌ Slack Error: ${slack_error}`;
+          return;
+        }
+  
+        if (slack_id) {
+          step2.className = "step complete";
+          step2.innerHTML = `✅ Slack Channel ID Found: <code>${slack_id}</code>`;
+          step3.className = "step in-progress";
+          step3.textContent = "🔄 Redirecting now...";
+          window.location.href = `https://slack.com/app_redirect?channel=${slack_id}`;
+        } else {
+          step2.className = "step failed";
+          step2.textContent = "⚠️ No Slack Channel ID found in Autotask or Slack.";
+          step3.className = "step failed";
+          step3.textContent = "❌ Cannot redirect.";
+        }
+  
+      } catch (err) {
+        console.error("Fetch failed:", err);
         step1.className = "step failed";
-        step1.textContent = "❌ Failed to fetch ticket.";
-        return;
-      }
-
-      const data = await response.json();
-      const { ticket, slack_id } = data;
-
-      step1.className = "step complete";
-      step1.innerHTML = `✅ Ticket Found: <code>${ticket.ticketNumber}</code><br>${ticket.description}`;
-
-      if (slack_id) {
-        step2.className = "step complete";
-        step2.innerHTML = `✅ Slack Channel ID Found: <code>${slack_id}</code>`;
-        step3.className = "step in-progress";
-        step3.textContent = "🔄 Redirecting now...";
-        window.location.href = `https://slack.com/app_redirect?channel=${slack_id}`;
-      } else {
-        step2.className = "step failed";
-        step2.textContent = "⚠️ Slack Channel ID not found in user-defined fields.";
-        step3.className = "step failed";
-        step3.textContent = "❌ Cannot redirect — no Slack Channel ID.";
+        step1.textContent = "❌ Network error while contacting server.";
       }
     }
-    if (slack_error) {
-      step2.className = "step failed";
-      step2.innerHTML = `❌ Slack Error: ${slack_error}`;
-    }
-
-
+  
     runFlow();
   </script>
 </body>
