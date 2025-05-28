@@ -1,14 +1,78 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Manifold Autotask Slack Bridge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+      background-color: #f9f9f9;
+      color: #333;
+    }
 
-{% block title %}LiveLink Preview{% endblock %}
+    .title {
+      font-size: 2rem;
+      font-weight: bold;
+      margin-bottom: 2rem;
+    }
 
-{% block content %}
-  <div class="container mt-4">
-    <h2>Ticket Preview</h2>
-    <p><strong>User:</strong> {{ email }}</p>
-    <p><strong>Ticket ID:</strong> {{ ticket_id }}</p>
-    <p><strong>Ticket Number:</strong> {{ ticket_number }}</p>
-    <p><strong>Description:</strong> {{ ticket_description }}</p>
-    <p><strong>Slack Channel ID (UDF):</strong> {{ slack_id or "Not Set" }}</p>
+    .step {
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-left: 6px solid #ccc;
+      background: white;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .step.complete {
+      border-color: #4caf50;
+      background-color: #e8f5e9;
+    }
+
+    .step.in-progress {
+      border-color: #2196f3;
+      background-color: #e3f2fd;
+    }
+
+    .step.failed {
+      border-color: #f44336;
+      background-color: #ffebee;
+    }
+
+    .footer {
+      margin-top: 2rem;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">Manifold Autotask Slack Bridge</div>
+
+  <div class="step complete">
+    ✅ Looking up Ticket
+    <div><strong>Ticket ID:</strong> {{ ticket_id }}</div>
+    <div><strong>Ticket Number:</strong> {{ ticket_number }}</div>
+    <div><strong>Description:</strong> {{ ticket_description }}</div>
   </div>
-{% endblock %}
+
+  <div class="step complete">
+    ✅ Looking up Slack Channel
+    <div><strong>Slack Channel ID:</strong> {{ slack_id or "Not Set" }}</div>
+  </div>
+
+  <div class="step in-progress">
+    🔄 Redirecting user to Slack Channel
+  </div>
+
+  {% if slack_id %}
+    <meta http-equiv="refresh" content="0;url=https://slack.com/app_redirect?channel={{ slack_id }}">
+  {% endif %}
+
+  <div class="footer">
+    Logged in as: {{ email }}
+  </div>
+</body>
+</html>
