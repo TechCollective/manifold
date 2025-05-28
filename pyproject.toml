@@ -25,6 +25,7 @@ sqlalchemy = "^2.0.40"
 alembic = "^1.15.2"
 pyunifi = { git = "https://github.com/TechCollective/pyunifi.git", rev = "master" }
 requests = "^2.32.3"
+pyautotask = {git = "https://github.com/TechCollective/pyautotask.git"}
 
 [tool.poetry.scripts]
 manifold = "manifold_cli.main:app"

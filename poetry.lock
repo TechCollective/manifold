@@ -877,6 +877,24 @@ dev = ["pre-commit", "tox"]
 testing = ["pytest", "pytest-benchmark"]
 
 [[package]]
+name = "pyautotask"
+version = "0.2"
+description = "API for Autotask"
+optional = false
+python-versions = "*"
+files = []
+develop = false
+
+[package.dependencies]
+requests = "*"
+
+[package.source]
+type = "git"
+url = "https://github.com/TechCollective/pyautotask.git"
+reference = "HEAD"
+resolved_reference = "8186e6854ca0810ede53910a30c083e71cae5fee"
+
+[[package]]
 name = "pycparser"
 version = "2.22"
 description = "C parser in Python"
@@ -1320,4 +1338,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "88583f850e5bc1703bca0c71237212c53c5b76f6443cba1fc970bd00bbeadae2"
+content-hash = "4ead8800d0aaa1c362113d3446d790396c0c94679215bf5ddc7fdc20a95ebe57"
