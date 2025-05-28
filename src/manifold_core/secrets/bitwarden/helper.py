@@ -55,19 +55,51 @@ class BitwardenHelper:
         return json.loads(result.stdout)["value"]
 
 
+    def create_secret(self, name, value):
+        if not self.project_id:
+            raise RuntimeError("BW_PROJECT_ID is not set in the environment")
 
-    def create_secret(self, name: str, value: str) -> None:
-        token = os.getenv("BW_ACCESS_TOKEN")
-
-        subprocess.run(
-            ["bws", "secret", "create", name, value, "-t", token],
+        result = subprocess.run(
+            ["bws", "secret", "create", name, value, self.project_id, "-t", os.getenv("BW_ACCESS_TOKEN")],
+            check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            check=True,
         )
+        return result.stdout.strip()
+
+    def set_secret(self, name, value):
+        if not self.project_id:
+            raise RuntimeError("BW_PROJECT_ID is not set in the environment")
+        return BitwardenHelper(self.project_id).create_secret(name, value)
 
     def has_secret(self, key: str) -> bool:
         output = self._run_bws(["secret", "list"])
         secrets = json.loads(output)
         return any(s.get("key") == key for s in secrets)
+
+
+    def list_secrets(self) -> list[str]:
+        result = subprocess.run(
+            ["bws", "secret", "list", "-t", os.getenv("BW_ACCESS_TOKEN")],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        # Parse JSON array of secrets
+        try:
+            secrets = json.loads(result.stdout)
+            return [s["key"] for s in secrets if "key" in s]
+        except Exception as e:
+            raise RuntimeError(f"Failed to parse bws secret list output: {e}")
+        
+    def delete_secret(self, key: str):
+        output = self._run_bws(["secret", "list"])
+        secrets = json.loads(output)
+        match = next((s for s in secrets if s.get("key") == key), None)
+        if not match:
+            raise ValueError(f"Secret '{key}' not found, cannot delete.")
+
+        secret_id = match["id"]
+        self._run_bws(["secret", "delete", secret_id, "--yes"])

@@ -16,3 +16,5 @@ class Backend(SecretBackend):
     def has_secret(self, key: str) -> bool:
         return BitwardenHelper(self.project_id).has_secret(key)
 
+    def delete_secret(self, name: str):
+        return BitwardenHelper(self.project_id).delete_secret(name)

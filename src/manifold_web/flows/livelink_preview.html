@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}LiveLink Preview{% endblock %}
+
+{% block content %}
+  <div class="container mt-4">
+    <h2>Ticket Preview</h2>
+    <p><strong>User:</strong> {{ email }}</p>
+    <p><strong>Ticket ID:</strong> {{ ticket_id }}</p>
+    <p><strong>Ticket Number:</strong> {{ ticket_number }}</p>
+    <p><strong>Description:</strong> {{ ticket_description }}</p>
+    <p><strong>Slack Channel ID (UDF):</strong> {{ slack_id or "Not Set" }}</p>
+  </div>
+{% endblock %}

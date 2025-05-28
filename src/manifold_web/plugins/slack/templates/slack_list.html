@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Slack Integrations{% endblock %}
+
+{% block content %}
+<h2>Slack Integrations</h2>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Workspace</th>
+            <th>Token</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for integration in integrations %}
+        <tr>
+            <td>{{ integration.name }}</td>
+            <td>{{ integration.workspace }}</td>
+            <td>{{ '✔' if integration.has_token else '✘' }}</td>
+            <td>
+                <form method="post" action="/slack/delete/{{ integration.name }}" onsubmit="return confirm('Delete {{ integration.name }}?');" style="display:inline;">
+                    <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="/slack/add" class="btn btn-primary mt-3">+ Add Slack Integration</a>
+{% endblock %}

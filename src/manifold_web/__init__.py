@@ -7,6 +7,10 @@ from authlib.integrations.flask_client import OAuth
 from manifold_web.routes.auth import auth_bp
 from manifold_web.routes.dashboard import dashboard_bp
 from manifold_web.plugins.unifi.routes import unifi_bp
+from manifold_web.plugins.slack.routes import slack_bp
+from manifold_web.plugins.autotask.routes import autotask_bp
+from manifold_web.routes.integrations import integrations_bp
+from manifold_web.flows.route import flows_bp
 
 from manifold_core.secrets.bitwarden.backend import Backend
 
@@ -59,5 +63,41 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(unifi_bp)
+    app.register_blueprint(integrations_bp)
+    app.register_blueprint(slack_bp)
+    app.register_blueprint(autotask_bp)
+    app.register_blueprint(flows_bp)
+    
+    from manifold_core.plugins.unifi.servers import list_unifi_servers
+    from manifold_core.plugins.slack.core import list_slack_integrations
+    from manifold_core.plugins.autotask.core import list_autotask_integrations
+
+    @app.context_processor
+    def inject_integrations():
+        integrations = {}
+
+        try:
+            if list_unifi_servers():
+                integrations["unifi"] = list_unifi_servers()
+        except Exception:
+            pass
+
+        try:
+            if list_slack_integrations():
+                integrations["slack"] = list_slack_integrations()
+        except Exception:
+            pass
+
+        try:
+            if list_autotask_integrations():
+                integrations["autotask"] = list_autotask_integrations()
+        except Exception:
+            pass
+
+        return {
+            "active_integrations": sorted(integrations.keys()),
+            **{f"{k}_integrations": v for k, v in integrations.items()}
+        }
+    
     
     return app

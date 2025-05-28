@@ -43,3 +43,7 @@ def callback():
 def logout():
     session.clear()
     return redirect("/")
+
+def get_authenticated_email() -> str | None:
+    """Returns the authenticated user's email from the session, or None if not logged in."""
+    return session.get("user", {}).get("email")

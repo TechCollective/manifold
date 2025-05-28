@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Add Autotask Integration{% endblock %}
+
+{% block content %}
+<h2>Add Autotask Integration</h2>
+<form method="post">
+    <div class="form-group">
+        <label for="name">Name</label>
+        <input name="name" id="name" type="text" class="form-control" required>
+    </div>
+    <div class="form-group">
+        <label for="api_url">API URL</label>
+        <input name="api_url" id="api_url" type="text" class="form-control" placeholder="e.g., webservicesXX.autotask.net" required>
+    </div>
+    <div class="form-group">
+        <label for="username">API Username</label>
+        <input name="username" id="username" type="text" class="form-control" required>
+    </div>
+    <div class="form-group">
+        <label for="integration_code">Integration Code</label>
+        <input name="integration_code" id="integration_code" type="text" class="form-control" required>
+    </div>
+    <div class="form-group">
+        <label for="secret">API Secret</label>
+        <input name="secret" id="secret" type="password" class="form-control" required>
+    </div>
+    <button type="submit" class="btn btn-success mt-3">Add</button>
+    <a href="/autotask" class="btn btn-secondary mt-3">Cancel</a>
+</form>
+{% endblock %}

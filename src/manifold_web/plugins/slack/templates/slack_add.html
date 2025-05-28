@@ -1,0 +1,29 @@
+{# manifold_web/plugins/slack/templates/slack_add.html #}
+{% extends "base.html" %}
+
+{% block title %}Add Slack Integration{% endblock %}
+
+{% block content %}
+<h2>Add Slack Integration</h2>
+
+<form method="POST" action="/slack/add">
+  <div class="form-group">
+    <label for="name">Name</label>
+    <input class="form-control" type="text" id="name" name="name" required />
+  </div>
+
+  <div class="form-group mt-2">
+    <label for="workspace">Workspace</label>
+    <input class="form-control" type="text" id="workspace" name="workspace" required />
+  </div>
+
+  <div class="form-group mt-2">
+    <label for="token">API Token</label>
+    <input class="form-control" type="password" id="token" name="token" required />
+  </div>
+
+  <button type="submit" class="btn btn-primary mt-3">Add Integration</button>
+</form>
+
+<a href="/slack" class="btn btn-link mt-3">← Back to list</a>
+{% endblock %}

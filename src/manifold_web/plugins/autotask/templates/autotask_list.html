@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Autotask Integrations{% endblock %}
+
+{% block content %}
+<h2>Autotask Integrations</h2>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>API URL</th>
+            <th>Credentials</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for at in autotask_integrations %}
+        <tr>
+            <td>{{ at.name }}</td>
+            <td>{{ at.api_url }}</td>
+            <td>{{ '✔' if at.has_credentials else '✘' }}</td>
+            <td>
+                <form method="post" action="/autotask/delete/{{ at.id }}" style="display:inline;" onsubmit="return confirm('Delete {{ at.name }}?');">
+                    <button class="btn btn-sm btn-danger">Delete</button>
+                </form>
+                <a href="/autotask/edit/{{ at.id }}" class="btn btn-sm btn-secondary">Edit</a>
+                <a href="/autotask/credentials/{{ at.id }}" class="btn btn-sm btn-primary">Add Credentials</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="/autotask/add" class="btn btn-primary mt-3">+ Add Autotask Integration</a>
+{% endblock %}
