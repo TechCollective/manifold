@@ -17,10 +17,10 @@ class AutotaskAPI:
     def _build_client(self) -> atsite.atSite:
         username, integration_code, secret = self._get_credentials()
         return atsite.atSite(
-            api_url=self.integration.api_url,
+            host=self.integration.api_url,
             username=username,
-            integration_code=integration_code,
-            secret=secret,
+            password=secret,
+            interactioncode=integration_code,
         )
 
     def save_credentials(self, username: str, integration_code: str, secret: str):
