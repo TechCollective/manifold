@@ -28,21 +28,29 @@ def api_livelink_preview(integration_id: int):
 
     try:
         ticket = get_ticket(integration_id, ticket_id)
-        slack_id = extract_udf(ticket, "SlackID")
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch ticket: {str(e)}"}), 500
 
-        # If no Slack channel has been set, try to look it up
+    # Attempt Slack lookup only after ticket is successfully fetched
+    try:
+        slack_id = extract_udf(ticket, "SlackID")
         if not slack_id:
-            slack = SlackAPI("default")  # update name if needed
-            channel_name = f"{ticket['ticketNumber'].lower().replace('.', '_')}"
+            slack = SlackAPI("default")  # or your stored integration name
+            channel_name = f"ticket-{ticket['ticketNumber'].lower().replace('.', '_')}"
             channel_id = slack.get_channel_id_by_name(channel_name)
 
             if channel_id:
-                # Optionally: update Autotask UDF with this channel ID here
                 slack_id = channel_id
+                # Optional: update ticket with Slack ID here
 
+    except Exception as e:
         return jsonify({
             "ticket": ticket,
-            "slack_id": slack_id
-        })
-    except Exception as e:
-        return jsonify({"error": f"Failed to fetch data: {str(e)}"}), 500
+            "error": f"Slack integration failed: {str(e)}"
+        }), 200
+
+    return jsonify({
+        "ticket": ticket,
+        "slack_id": slack_id
+    })
+
