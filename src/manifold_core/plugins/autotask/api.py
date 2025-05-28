@@ -14,9 +14,9 @@ class AutotaskAPI:
         secret = self.secrets.get_secret(f"autotask:{self.integration.name}:secret")
         return username, integration_code, secret
 
-    def _build_client(self) -> atsite.ATSite:
+    def _build_client(self) -> atsite.atSite:
         username, integration_code, secret = self._get_credentials()
-        return atsite.ATSite(
+        return atsite.atSite(
             api_url=self.integration.api_url,
             username=username,
             integration_code=integration_code,
