@@ -27,6 +27,6 @@ def livelink_preview(integration_id: int):
         ticket_id=ticket.get("id"),
         ticket_number=ticket.get("ticketNumber"),
         ticket_description=ticket.get("description"),
-        # slack_id=ticket.get("userDefinedFields", {}).get("SlackID")
+        slack_id=ticket.get("userDefinedFields", {}).get("SlackID")
     )
 
