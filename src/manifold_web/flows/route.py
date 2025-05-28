@@ -44,7 +44,7 @@ def api_livelink_preview(integration_id: int):
     if not slack_id:
         try:
             slack = SlackAPI(get_slack_name())
-            channel_name = f"ticket-{ticket['ticketNumber'].lower().replace('.', '_')}"
+            channel_name = f"{ticket['ticketNumber'].lower().replace('.', '_')}"
             logger.debug(f"Looking up Slack channel: {channel_name}")
 
             channel_id = slack.get_channel_id_by_name(channel_name)
