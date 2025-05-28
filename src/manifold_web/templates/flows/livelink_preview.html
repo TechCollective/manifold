@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <title>Manifold Autotask Slack Bridge</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if slack_id %}
+    <meta http-equiv="refresh" content="0;url=https://slack.com/app_redirect?channel={{ slack_id }}">
+  {% endif %}
   <style>
     body {
       font-family: sans-serif;
@@ -53,51 +56,29 @@
 
   <div class="step complete">
     ✅ Looking up Ticket
-    <div><strong>Ticket ID:</strong> {{ ticket_id }}</div>
-    <div><strong>Ticket Number:</strong> {{ ticket_number }}</div>
-    <div><strong>Description:</strong> {{ ticket_description }}</div>
+    {% if ticket_id %}
+      <div><strong>Ticket ID:</strong> {{ ticket_id }}</div>
+      <div><strong>Ticket Number:</strong> {{ ticket_number }}</div>
+      <div><strong>Description:</strong> {{ ticket_description }}</div>
+    {% else %}
+      <div>Ticket details loading or not available.</div>
+    {% endif %}
   </div>
 
-  <div class="step complete">
-    ✅ Looking up Slack Channel
-    <div><strong>Slack Channel ID:</strong> {{ slack_id or "Not Set" }}</div>
+  <div class="step {{ 'complete' if slack_id else 'failed' }}">
+    {% if slack_id %}
+      ✅ Slack Channel Found: <code>{{ slack_id }}</code>
+    {% else %}
+      ⚠️ No Slack Channel ID found in user-defined fields.
+    {% endif %}
   </div>
 
   <div class="step in-progress">
-    🔄 Redirecting user to Slack Channel
+    🔄 Redirecting user to Slack Channel...
   </div>
-
-  {% if ticket.userDefinedFields %}
-    <div class="step complete">
-      <strong>Raw userDefinedFields:</strong>
-      <pre>{{ ticket.userDefinedFields | tojson(indent=2) }}</pre>
-
-      {% if ticket.userDefinedFields is mapping %}
-        {% for field in ticket.userDefinedFields %}
-          <div><strong>{{ field }}:</strong> {{ ticket.userDefinedFields[field] }}</div>
-        {% endfor %}
-      {% endif %}
-    </div>
-  {% else %}
-    <div class="step failed">
-      No userDefinedFields found on ticket.
-    </div>
-  {% endif %}
-
-
-
-  {% if slack_id %}
-    <meta http-equiv="refresh" content="0;url=https://slack.com/app_redirect?channel={{ slack_id }}">
-  {% endif %}
 
   <div class="footer">
     Logged in as: {{ email }}
   </div>
-
-  <div class="step">
-    <strong>Full Ticket (Debug):</strong>
-    <pre>{{ ticket | tojson(indent=2) }}</pre>
-  </div>
-
 </body>
 </html>

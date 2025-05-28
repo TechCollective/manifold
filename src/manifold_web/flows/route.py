@@ -1,6 +1,6 @@
 from flask import Blueprint, request, session, render_template
 from manifold_web.routes.auth import get_authenticated_email
-from manifold_core.plugins.autotask.core import get_ticket
+from manifold_core.plugins.autotask.core import get_ticket, extract_udf
 
 flows_bp = Blueprint("flows", __name__, url_prefix="/flows")
 
@@ -21,6 +21,8 @@ def livelink_preview(integration_id: int):
     except Exception as e:
         return f"Failed to retrieve ticket: {e}", 500   
 
+    slack_id = extract_udf(ticket, "SlackID")
+
     return render_template(
         "flows/livelink_preview.html",
         email=email,
@@ -28,6 +30,6 @@ def livelink_preview(integration_id: int):
         ticket_id=ticket.get("id"),
         ticket_number=ticket.get("ticketNumber"),
         ticket_description=ticket.get("description"),
-        #slack_id=ticket.get("userDefinedFields")
+        slack_id=slack_id
     )
 

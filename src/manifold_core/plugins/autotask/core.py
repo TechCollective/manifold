@@ -119,3 +119,10 @@ def get_ticket(autotask_id: int, ticket_id: int) -> dict:
         raise ValueError(f"Ticket with ID {ticket_id} not found")
 
     return results[0]
+
+def extract_udf(ticket: dict, field_name: str) -> str | None:
+    """Searches for a user-defined field by name and returns its value."""
+    for udf in ticket.get("userDefinedFields", []):
+        if udf.get("name") == field_name:
+            return udf.get("value")
+    return None
