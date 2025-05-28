@@ -1,7 +1,7 @@
 from pyautotask import atsite
+from pyautotask.api import PyAutotaskAPI
 from manifold_core.plugins.autotask.models import AutotaskIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
-import requests
 
 
 class AutotaskAPI:
@@ -15,7 +15,7 @@ class AutotaskAPI:
         secret = self.secrets.get_secret(f"autotask:{self.integration.name}:secret")
         return username, integration_code, secret
 
-    def _build_client(self) -> ATSite:
+    def _build_client(self) -> atsite.ATSite:
         username, integration_code, secret = self._get_credentials()
         return atsite.ATSite(
             api_url=self.integration.api_url,
@@ -24,7 +24,7 @@ class AutotaskAPI:
             secret=secret,
         )
 
-    def _get_api(self):
+    def _get_api(self) -> PyAutotaskAPI:
         username, integration_code, secret = self._get_credentials()
         return PyAutotaskAPI(
             username=username,
@@ -64,5 +64,4 @@ class AutotaskAPI:
     
     def get_ticket(self, ticket_id: int) -> dict:
         api = self._get_api()
-        ticket = api.get("Tickets", ticket_id)
-        return ticket
+        return api.get("Tickets", ticket_id)
