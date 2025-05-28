@@ -5,7 +5,7 @@ from flask import jsonify
 from manifold_web.routes.auth import get_authenticated_email
 from manifold_core.plugins.autotask.core import get_ticket, extract_udf
 from manifold_core.plugins.slack.api import SlackAPI
-
+from manifold_core.plugins.slack.core import get_slack_name
 
 
 flows_bp = Blueprint("flows", __name__, url_prefix="/flows")
@@ -43,7 +43,7 @@ def api_livelink_preview(integration_id: int):
 
     if not slack_id:
         try:
-            slack = SlackAPI("default")  # Adjust integration name if needed
+            slack = SlackAPI(get_slack_name())
             channel_name = f"ticket-{ticket['ticketNumber'].lower().replace('.', '_')}"
             logger.debug(f"Looking up Slack channel: {channel_name}")
 

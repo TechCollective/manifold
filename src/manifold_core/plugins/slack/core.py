@@ -86,3 +86,15 @@ def set_slack_token(slack_id: str, token: str) -> None:
 
     secrets = get_secret_backend()
     secrets.set_secret(f"slack:{record.name}:token", token)
+
+def get_slack_name() -> str:
+    session = SessionLocal()
+    records = session.query(SlackIntegrationDB).all()
+    session.close()
+
+    if len(records) == 0:
+        raise ValueError("No Slack integrations are configured")
+    if len(records) > 1:
+        raise ValueError("Multiple Slack integrations found; cannot determine default")
+
+    return records[0].name
