@@ -146,8 +146,9 @@ def update_ticket_udf(integration_id: int, ticket_id: int, field_name: str, valu
 
     try:
         result = client._api_update("Tickets", params)
+        logger.debug(f"Autotask update result: {result}")
     except Exception as e:
         raise Exception(f"Autotask update failed: {e}")
 
-    if not result or not result[0].get("id") == ticket_id:
+    if not result or result.get("id") != ticket_id:
         raise Exception("Failed to update Autotask ticket UDF")
