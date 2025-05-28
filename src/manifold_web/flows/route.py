@@ -24,9 +24,10 @@ def livelink_preview(integration_id: int):
     return render_template(
         "flows/livelink_preview.html",
         email=email,
+        ticket=ticket,
         ticket_id=ticket.get("id"),
         ticket_number=ticket.get("ticketNumber"),
         ticket_description=ticket.get("description"),
-        slack_id=ticket.get("userDefinedFields")
+        #slack_id=ticket.get("userDefinedFields")
     )
 

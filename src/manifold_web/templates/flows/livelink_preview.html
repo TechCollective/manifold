@@ -68,15 +68,22 @@
   </div>
 
   {% if ticket.userDefinedFields %}
-    <div class="step">
+    <div class="step complete">
       <strong>Raw userDefinedFields:</strong>
       <pre>{{ ticket.userDefinedFields | tojson(indent=2) }}</pre>
+
+      {% if ticket.userDefinedFields is mapping %}
+        {% for field in ticket.userDefinedFields %}
+          <div><strong>{{ field }}:</strong> {{ ticket.userDefinedFields[field] }}</div>
+        {% endfor %}
+      {% endif %}
     </div>
   {% else %}
     <div class="step failed">
       No userDefinedFields found on ticket.
     </div>
   {% endif %}
+
 
 
   {% if slack_id %}
@@ -86,5 +93,11 @@
   <div class="footer">
     Logged in as: {{ email }}
   </div>
+
+  <div class="step">
+    <strong>Full Ticket (Debug):</strong>
+    <pre>{{ ticket | tojson(indent=2) }}</pre>
+  </div>
+
 </body>
 </html>
