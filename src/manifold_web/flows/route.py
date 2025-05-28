@@ -4,41 +4,16 @@ from manifold_web.routes.auth import get_authenticated_email
 flows_bp = Blueprint("flows", __name__, url_prefix="/flows")
 
 @flows_bp.route("/livelink", methods=["GET"])
-def livelink_preview():
-    # 🔐 Ensure the user is authenticated
-    email = get_authenticated_email()
-    if not email:
-        return "Unauthorized", 403
-
-    # 📥 Read the ticket ID from the query string
+def livelink_landing():
+    # ✅ Pull the ticket ID from query params
     ticket_id = request.args.get("ticketID")
     if not ticket_id:
-        return "Missing required ticketID parameter", 400
+        return "Missing ticketID", 400
 
-    # 🔎 Look up the ticket info using Autotask API
-    from manifold_core.plugins.autotask.core import list_autotask_integrations
-    from manifold_core.plugins.autotask.api import AutotaskAPI
+    # ✅ Get authenticated email (abstracted for auth system)
+    email = get_authenticated_email(session)
+    if not email:
+        return "Unauthorized: No authenticated email found.", 403
 
-    integrations = list_autotask_integrations()
-    if not integrations:
-        return "No Autotask integration configured.", 500
-
-    try:
-        api = AutotaskAPI(integrations[0].id)
-        ticket = api.get_ticket(ticket_id)
-
-        ticket_number = ticket.get("ticketNumber")
-        description = ticket.get("title") or ticket.get("description") or ""
-        udf_fields = ticket.get("userDefinedFields", {})
-        slack_id = udf_fields.get("SlackID")
-
-    except Exception as e:
-        return f"Failed to retrieve ticket: {e}", 500
-
-    return render_template("livelink_preview.html",
-                           email=email,
-                           ticket_id=ticket_id,
-                           ticket_number=ticket_number,
-                           ticket_description=description,
-                           slack_id=slack_id)
-
+    # ✅ For now, just show the information
+    return render_template("flows/livelink_preview.html", ticket_id=ticket_id, email=email)
