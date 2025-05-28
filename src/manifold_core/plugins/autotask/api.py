@@ -1,5 +1,4 @@
 from pyautotask import atsite
-from pyautotask.api import PyAutotaskAPI
 from manifold_core.plugins.autotask.models import AutotaskIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
 
@@ -24,16 +23,6 @@ class AutotaskAPI:
             secret=secret,
         )
 
-    def _get_api(self) -> PyAutotaskAPI:
-        username, integration_code, secret = self._get_credentials()
-        return PyAutotaskAPI(
-            username=username,
-            integration_code=integration_code,
-            secret=secret,
-            base_url=self.integration.api_url,
-        )
-
-
     def save_credentials(self, username: str, integration_code: str, secret: str):
         self.secrets.set_secret(f"autotask:{self.integration.name}:username", username)
         self.secrets.set_secret(f"autotask:{self.integration.name}:integration_code", integration_code)
@@ -52,16 +41,17 @@ class AutotaskAPI:
             for key in ["username", "integration_code", "secret"]
         )
 
-
-    # Placeholder for future API validation
     def test_connection(self) -> bool:
         try:
-            username, secret = self._get_credentials()
-            # Add connection test logic here later
-            return bool(username and secret)
+            client = self._build_client()
+            # Implement a simple API call to test the connection, e.g., fetching a known resource
+            # For example:
+            # response = client.get("Tickets", 1)
+            # return response is not None
+            return True  # Placeholder
         except Exception:
             return False
-    
+
     def get_ticket(self, ticket_id: int) -> dict:
-        api = self._get_api()
-        return api.get("Tickets", ticket_id)
+        client = self._build_client()
+        return client.get("Tickets", ticket_id)
