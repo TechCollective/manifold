@@ -33,6 +33,8 @@
       const step1 = document.getElementById("step1");
       const step2 = document.getElementById("step2");
       const step3 = document.getElementById("step3");
+      const data = await response.json();
+      const { ticket, slack_id, slack_error } = data;
 
       if (!response.ok) {
         step1.className = "step failed";
@@ -59,6 +61,11 @@
         step3.textContent = "❌ Cannot redirect — no Slack Channel ID.";
       }
     }
+    if (slack_error) {
+      step2.className = "step failed";
+      step2.innerHTML = `❌ Slack Error: ${slack_error}`;
+    }
+
 
     runFlow();
   </script>
