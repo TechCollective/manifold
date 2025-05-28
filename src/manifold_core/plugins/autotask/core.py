@@ -126,3 +126,27 @@ def extract_udf(ticket: dict, field_name: str) -> str | None:
         if udf.get("name") == field_name:
             return udf.get("value")
     return None
+
+def update_ticket_udf(integration_id: int, ticket_id: int, field_name: str, value: str) -> None:
+    session = SessionLocal()
+    integration = session.query(AutotaskIntegrationDB).filter_by(id=integration_id).first()
+    session.close()
+
+    if not integration:
+        raise ValueError("Autotask integration not found")
+
+    client = AutotaskAPI(integration)._build_client()
+
+    update_payload = {
+        "id": ticket_id,
+        "userDefinedFields": [
+            {
+                "name": field_name,
+                "value": value
+            }
+        ]
+    }
+
+    result = client.update("Tickets", update_payload)
+    if not result or not result[0].get("id") == ticket_id:
+        raise Exception("Failed to update Autotask ticket UDF")

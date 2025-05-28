@@ -3,7 +3,7 @@ import logging
 from flask import jsonify
 
 from manifold_web.routes.auth import get_authenticated_email
-from manifold_core.plugins.autotask.core import get_ticket, extract_udf
+from manifold_core.plugins.autotask.core import get_ticket, extract_udf, update_ticket_udf
 from manifold_core.plugins.slack.api import SlackAPI
 from manifold_core.plugins.slack.core import get_slack_name
 
@@ -53,7 +53,12 @@ def api_livelink_preview(integration_id: int):
                 slack_id = channel_id
                 logger.debug(f"Found Slack channel ID: {channel_id}")
 
-                # TODO: Update Autotask ticket UDF with slack_id here
+                try:
+                    update_ticket_udf(integration_id, ticket["id"], "SlackID", slack_id)
+                    logger.debug("SlackID UDF updated in Autotask")
+                except Exception as update_error:
+                    slack_error = f"SlackID found, but failed to update Autotask: {update_error}"
+                    logger.exception("Failed to update Autotask ticket with SlackID")
 
             else:
                 logger.warning(f"Slack channel not found: {channel_name}")
