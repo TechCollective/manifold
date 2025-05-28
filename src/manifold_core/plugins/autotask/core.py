@@ -110,4 +110,12 @@ def get_ticket(autotask_id: int, ticket_id: int) -> dict:
     if not integration:
         raise ValueError("Autotask integration not found")
 
-    return AutotaskAPI(integration).get_ticket(ticket_id)
+    api = AutotaskAPI(integration)
+    client = api._build_client()
+
+    results = client.get_ticket_by_id(ticket_id)
+
+    if not results:
+        raise ValueError(f"Ticket with ID {ticket_id} not found")
+
+    return results[0]
