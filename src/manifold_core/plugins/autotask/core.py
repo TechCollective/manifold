@@ -145,7 +145,7 @@ def update_ticket_udf(integration_id: int, ticket_id: int, field_name: str, valu
 
 
     try:
-        result = client._update("Tickets", params)
+        result = client._api_update("Tickets", params)
     except Exception as e:
         raise Exception(f"Autotask update failed: {e}")
 
