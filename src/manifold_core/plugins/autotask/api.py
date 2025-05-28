@@ -1,4 +1,4 @@
-from pyautotask.atsite import ATSite
+from pyautotask import atsite
 from manifold_core.plugins.autotask.models import AutotaskIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
 import requests
@@ -17,7 +17,7 @@ class AutotaskAPI:
 
     def _build_client(self) -> ATSite:
         username, integration_code, secret = self._get_credentials()
-        return ATSite(
+        return atsite.ATSite(
             api_url=self.integration.api_url,
             username=username,
             integration_code=integration_code,
