@@ -2,6 +2,7 @@ from typing import List
 from manifold_core.models.base import SessionLocal
 from manifold_core.plugins.autotask.models import AutotaskIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
+from manifold_core.plugins.autotask.api import AutotaskAPI
 
 
 class AutotaskIntegrationInfo:
@@ -100,3 +101,13 @@ def set_autotask_credentials(autotask_id: int, username: str, integration_code: 
     secrets.set_secret(f"autotask:{record.name}:integration_code", integration_code)
     secrets.set_secret(f"autotask:{record.name}:secret", secret)
 
+
+def get_ticket(autotask_id: int, ticket_id: int) -> dict:
+    session = SessionLocal()
+    integration = session.query(AutotaskIntegrationDB).filter_by(id=autotask_id).first()
+    session.close()
+
+    if not integration:
+        raise ValueError("Autotask integration not found")
+
+    return AutotaskAPI(integration).get_ticket(ticket_id)
