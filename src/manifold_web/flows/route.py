@@ -21,5 +21,12 @@ def livelink_preview(integration_id: int):
     except Exception as e:
         return f"Failed to retrieve ticket: {e}", 500   
 
-    return render_template("flows/livelink_preview.html", ticket=ticket)
+    return render_template(
+        "flows/livelink_preview.html",
+        email=email,
+        ticket_id=ticket.get("id"),
+        ticket_number=ticket.get("ticketNumber"),
+        ticket_description=ticket.get("description"),
+        slack_id=ticket.get("userDefinedFields", {}).get("SlackChannelID")
+    )
 
