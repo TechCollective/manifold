@@ -2,7 +2,9 @@ from typing import List
 from manifold_core.models.base import SessionLocal
 from manifold_core.plugins.slack.models import SlackIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
+import logging
 
+logger = logging.getLogger(__name__)
 
 class SlackIntegrationInfo:
     def __init__(self, record: SlackIntegrationDB, has_token: bool):
