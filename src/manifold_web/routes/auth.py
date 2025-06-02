@@ -26,7 +26,8 @@ def login():
     next_url = request.args.get("next", "/")
     session["next_url"] = next_url  
     print(f"[DEBUG] Redirecting to JumpCloud with callback URI: {redirect_uri}")
-    return current_app.oauth.jumpcloud.authorize_redirect(redirect_uri)
+    return current_app.oauth.jumpcloud.authorize_redirect(redirect_uri=redirect_uri)
+
 
 
 @auth_bp.route("/callback")
