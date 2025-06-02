@@ -1,11 +1,12 @@
 from flask import Blueprint, redirect, url_for, session, current_app, request
 import os
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 AUTH_MODE = os.getenv("AUTH_MODE", "JUMPCLOUD_AUTH")
-
 auth_bp = Blueprint("auth", __name__)
+
 
 def login_required(view_func):
     """Decorator that enforces login only if AUTH_MODE is set to JUMPCLOUD_AUTH"""
@@ -21,10 +22,12 @@ def login_required(view_func):
 
 @auth_bp.route("/login")
 def login():
+    redirect_uri = url_for("auth.callback", _external=True)
     next_url = request.args.get("next", "/")
-    # Your JumpCloud auth logic here...
-    session["user"] = {"email": authenticated_email}  # or however you store it
-    return redirect(next_url)
+    session["next_url"] = next_url  # Save for after auth
+    print(f"[DEBUG] Redirecting to JumpCloud with callback URI: {redirect_uri}")
+    return current_app.oauth.jumpcloud.authorize_redirect(redirect_uri)
+
 
 @auth_bp.route("/callback")
 def callback():
@@ -35,15 +38,21 @@ def callback():
         user_info = current_app.oauth.jumpcloud.userinfo(token=token)
         print(f"[DEBUG] User info: {user_info}")
         session["user"] = user_info
-        return redirect(url_for("dashboard.home"))
+
+        # Redirect to the originally requested URL
+        next_url = session.pop("next_url", url_for("dashboard.home"))
+        return redirect(next_url)
+
     except Exception as e:
         print(f"[ERROR] Callback failed: {e}")
         return "Authentication failed", 500
+
 
 @auth_bp.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
+
 
 def get_authenticated_email(session) -> str | None:
     """Returns the authenticated user's email from the session, or None if not logged in."""
