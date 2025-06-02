@@ -3,6 +3,8 @@ from manifold_core.models.base import SessionLocal
 from manifold_core.plugins.slack.models import SlackIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
 import logging
+import requests
+
 
 logger = logging.getLogger(__name__)
 
@@ -100,3 +102,20 @@ def get_slack_name() -> str:
         raise ValueError("Multiple Slack integrations found; cannot determine default")
 
     return records[0].name
+
+def archive_slack_channel(channel_id: str) -> None:
+    """Archives a Slack channel by ID."""
+    name = get_slack_name()
+    secrets = get_secret_backend()
+    token = secrets.get_secret(f"slack:{name}:token")
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    response = requests.post("https://slack.com/api/conversations.archive", headers=headers, json={"channel": channel_id})
+    if not response.ok or not response.json().get("ok"):
+        logger.error(f"Failed to archive channel: {response.text}")
+        raise Exception("Slack channel archive failed")
+
+    logger.debug(f"Archived Slack channel ID: {channel_id}")

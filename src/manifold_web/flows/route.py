@@ -5,7 +5,7 @@ from flask import jsonify
 from manifold_web.routes.auth import get_authenticated_email
 from manifold_core.plugins.autotask.core import get_ticket, extract_udf, update_ticket_udf
 from manifold_core.plugins.slack.api import SlackAPI
-from manifold_core.plugins.slack.core import get_slack_name
+from manifold_core.plugins.slack.core import get_slack_name, archive_slack_channel
 
 
 flows_bp = Blueprint("flows", __name__, url_prefix="/flows")
@@ -76,3 +76,27 @@ def api_livelink_preview(integration_id: int):
         "slack_id": slack_id,
         "slack_error": slack_error
     })
+    
+@flows.route("/flows/webhook/autotask", methods=["POST"])
+@csrf.exempt
+def autotask_webhook():
+    from flask import request, jsonify
+
+    try:
+        data = request.get_json(force=True)
+        print("[DEBUG] Webhook received:", data)
+
+        ticket = data.get("Entity", {})
+        status = ticket.get("Status")
+        ticket_id = ticket.get("id")
+        slack_id = ticket.get("UserDefinedFields", {}).get("SlackID")
+
+        print(f"[DEBUG] Ticket {ticket_id} status: {status}")
+        if status in ["Closed", "Completed", "Resolved"] and slack_id:
+            archive_slack_channel(slack_id)
+
+        return jsonify({"ok": True})
+    except Exception as e:
+        print("[ERROR] Webhook processing failed:", e)
+        return jsonify({"error": str(e)}), 500
+
