@@ -22,7 +22,7 @@ def login_required(view_func):
 
 @auth_bp.route("/login")
 def login():
-    redirect_uri = url_for("auth.callback", _external=True)
+    redirect_uri = url_for("auth.callback", _external=True, _scheme="https")
     next_url = request.args.get("next", "/")
     session["next_url"] = next_url  
     print(f"[DEBUG] Redirecting to JumpCloud with callback URI: {redirect_uri}")
