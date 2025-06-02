@@ -78,7 +78,7 @@ def api_livelink_preview(integration_id: int):
     })
 
 #@csrf.exempt    
-@flows_bp.route("/flows/webhook/autotask", methods=["POST"])
+@flows_bp.route("/webhook/autotask", methods=["POST"])
 def autotask_webhook():
     from flask import request, jsonify
 
