@@ -24,7 +24,7 @@ def login_required(view_func):
 def login():
     redirect_uri = url_for("auth.callback", _external=True)
     next_url = request.args.get("next", "/")
-    session["next_url"] = next_url  # Save for after auth
+    session["next_url"] = next_url  
     print(f"[DEBUG] Redirecting to JumpCloud with callback URI: {redirect_uri}")
     return current_app.oauth.jumpcloud.authorize_redirect(redirect_uri)
 
@@ -40,7 +40,7 @@ def callback():
         session["user"] = user_info
 
         # Redirect to the originally requested URL
-        next_url = session.pop("next_url", url_for("dashboard.home"))
+        next_url = request.args.get("next") or session.pop("next_url", "/")
         return redirect(next_url)
 
     except Exception as e:
