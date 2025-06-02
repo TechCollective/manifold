@@ -21,9 +21,10 @@ def login_required(view_func):
 
 @auth_bp.route("/login")
 def login():
-    redirect_uri = "https://manifold.techcollective.com/callback"
-    print(f"[DEBUG] Using redirect URI: {redirect_uri}")
-    return current_app.oauth.jumpcloud.authorize_redirect(redirect_uri)
+    next_url = request.args.get("next", "/")
+    # Your JumpCloud auth logic here...
+    session["user"] = {"email": authenticated_email}  # or however you store it
+    return redirect(next_url)
 
 @auth_bp.route("/callback")
 def callback():

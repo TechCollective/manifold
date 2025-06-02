@@ -1,84 +1,44 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Manifold Autotask Slack Bridge</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: sans-serif; padding: 2rem; background: #f9f9f9; }
-    .title { font-size: 2rem; font-weight: bold; margin-bottom: 2rem; }
-    .step { padding: 1rem; margin-bottom: 1rem; background: #fff; border-left: 5px solid #ccc; }
-    .complete { border-color: #4caf50; background: #e8f5e9; }
-    .in-progress { border-color: #2196f3; background: #e3f2fd; }
-    .failed { border-color: #f44336; background: #ffebee; }
-    code { background: #eee; padding: 2px 4px; }
-  </style>
-</head>
-<body>
-  <div class="title">Manifold Autotask Slack Bridge</div>
+<html>
+  <head>
+    <title>Manifold Autotask Slack Bridge</title>
+    <meta charset="utf-8" />
+    <script>
+      async function startWorkflow() {
+        const url = new URL(window.location.href);
+        const apiUrl = `/flows/api/livelink/${url.pathname.split("/").pop()}${url.search}`;
 
-  <div id="steps">
-    <div id="step1" class="step in-progress">🔄 Looking up Ticket...</div>
-    <div id="step2" class="step">🔄 Looking up Slack Channel...</div>
-    <div id="step3" class="step">⏳ Redirecting to Slack (if applicable)...</div>
-  </div>
+        try {
+          const response = await fetch(apiUrl);
+          const data = await response.json();
 
-  <script>
-    async function runFlow() {
-      const params = new URLSearchParams(window.location.search);
-      const ticketID = params.get("ticketID");
-      const integrationID = {{ integration_id }};
-      const step1 = document.getElementById("step1");
-      const step2 = document.getElementById("step2");
-      const step3 = document.getElementById("step3");
-  
-      console.log("Starting LiveLink Flow", { integrationID, ticketID });
-  
-      try {
-        const response = await fetch(`/flows/api/livelink/${integrationID}?ticketID=${ticketID}`);
-        console.log("Response status:", response.status);
-  
-        const data = await response.json();
-        console.log("API Response:", data);
-  
-        const { ticket, slack_id, slack_error } = data;
-  
-        if (data.error) {
-          step1.className = "step failed";
-          step1.textContent = `❌ ${data.error}`;
-          return;
+          if (data.error) {
+            document.getElementById("status").innerText = `❌ ${data.error}`;
+            return;
+          }
+
+          if (data.slack_error) {
+            document.getElementById("status").innerText = `❌ Slack Error: ${data.slack_error}`;
+            return;
+          }
+
+          if (data.slack_id) {
+            document.getElementById("status").innerText = "✅ Slack channel found. Redirecting…";
+            window.location.href = `https://slack.com/app_redirect?channel=${data.slack_id}`;
+            return;
+          }
+
+          document.getElementById("status").innerText = "⚠️ No Slack channel found or created.";
+        } catch (err) {
+          document.getElementById("status").innerText = `❌ Unexpected error: ${err}`;
         }
-  
-        step1.className = "step complete";
-        step1.innerHTML = `✅ Ticket Found: <code>${ticket.ticketNumber}</code><br>${ticket.description}`;
-  
-        if (slack_error) {
-          step2.className = "step failed";
-          step2.textContent = `❌ Slack Error: ${slack_error}`;
-          return;
-        }
-  
-        if (slack_id) {
-          step2.className = "step complete";
-          step2.innerHTML = `✅ Slack Channel ID Found: <code>${slack_id}</code>`;
-          step3.className = "step in-progress";
-          step3.textContent = "🔄 Redirecting now...";
-          window.location.href = `https://slack.com/app_redirect?channel=${slack_id}`;
-        } else {
-          step2.className = "step failed";
-          step2.textContent = "⚠️ No Slack Channel ID found in Autotask or Slack.";
-          step3.className = "step failed";
-          step3.textContent = "❌ Cannot redirect.";
-        }
-  
-      } catch (err) {
-        console.error("Fetch failed:", err);
-        step1.className = "step failed";
-        step1.textContent = "❌ Network error while contacting server.";
       }
-    }
-  
-    runFlow();
-  </script>
-</body>
+
+      window.onload = startWorkflow;
+    </script>
+  </head>
+  <body>
+    <h1>Manifold Autotask Slack Bridge</h1>
+    <p id="status">🔄 Starting lookup…</p>
+  </body>
 </html>

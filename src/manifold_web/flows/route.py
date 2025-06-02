@@ -1,4 +1,4 @@
-from flask import Blueprint, request, session, render_template
+from flask import Blueprint, request, session, render_template, url_for
 import logging
 from flask import jsonify
 
@@ -15,8 +15,7 @@ logger = logging.getLogger(__name__)
 def livelink_preview(integration_id: int):
     email = session.get("user", {}).get("email")
     if not email:
-        return "Unauthorized", 403
-
+        return redirect(url_for("auth.login", next=request.full_path))
     return render_template("flows/livelink_preview.html", integration_id=integration_id)
 
 
@@ -26,25 +25,31 @@ def api_livelink_preview(integration_id: int):
     if not email:
         return jsonify({"error": "Unauthorized"}), 403
 
+    # Grab values from the query string
     ticket_id = request.args.get("ticketID", type=int)
-    if not ticket_id:
-        return jsonify({"error": "Missing ticketID parameter"}), 400
+    ticket_number = request.args.get("ticketNumber")
+    title = request.args.get("title", "")
+    description = request.args.get("description", "")
+    slack_id = request.args.get("slackID")
 
-    # Step 1: Try to retrieve the Autotask ticket
-    try:
-        ticket = get_ticket(integration_id, ticket_id)
-    except Exception as e:
-        logger.exception("Failed to fetch Autotask ticket")
-        return jsonify({"error": f"Failed to fetch ticket: {str(e)}"}), 500
+    # If anything critical is missing, bail early
+    if not ticket_id or not ticket_number:
+        return jsonify({"error": "Missing required ticket fields"}), 400
 
-    # Step 2: Try to retrieve Slack channel
-    slack_id = extract_udf(ticket, "SlackID")
+    ticket = {
+        "id": ticket_id,
+        "ticketNumber": ticket_number,
+        "title": title,
+        "description": description,
+    }
+
     slack_error = None
 
+    # If SlackID is not present, perform Slack lookup
     if not slack_id:
         try:
             slack = SlackAPI(get_slack_name())
-            channel_name = f"{ticket['ticketNumber'].lower().replace('.', '_')}"
+            channel_name = ticket_number.lower().replace(".", "_")
             logger.debug(f"Looking up Slack channel: {channel_name}")
 
             channel_id = slack.get_channel_id_by_name(channel_name)
@@ -53,24 +58,21 @@ def api_livelink_preview(integration_id: int):
                 slack_id = channel_id
                 logger.debug(f"Found Slack channel ID: {channel_id}")
 
+                # Attempt to update the Autotask UDF
                 try:
-                    update_ticket_udf(integration_id, ticket["id"], "SlackID", slack_id)
-                    logger.debug("SlackID UDF updated in Autotask")
-                except Exception as update_error:
-                    slack_error = f"SlackID found, but failed to update Autotask: {update_error}"
+                    update_ticket_udf(integration_id, ticket_id, "SlackID", slack_id)
+                except Exception as e:
+                    slack_error = f"SlackID found, but failed to update Autotask: {e}"
                     logger.exception("Failed to update Autotask ticket with SlackID")
-
             else:
                 logger.warning(f"Slack channel not found: {channel_name}")
 
         except Exception as e:
-            slack_error = f"Slack integration failed: {str(e)}"
+            slack_error = f"Slack integration failed: {e}"
             logger.exception("Slack lookup failed")
 
-    # Step 3: Return the results
     return jsonify({
         "ticket": ticket,
         "slack_id": slack_id,
         "slack_error": slack_error
     })
-
