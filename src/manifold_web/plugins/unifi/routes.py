@@ -14,7 +14,8 @@ from manifold_core.plugins.unifi.sites import (
 )
 
 from manifold_core.plugins.unifi.devices import (
-    lookup_unifi_device
+    lookup_unifi_device,
+    sync_unifi_devices
 )
 
 
@@ -99,11 +100,10 @@ def sync_sites_web():
         flash(f"Failed to sync sites: {str(e)}", "error")
     return redirect(url_for("unifi.index"))
 
-@unifi_bp.route("/sync-devices", methods=["POST"])
+@unifi_bp.route("/unifi/sync-devices", methods=["POST"])
 def sync_devices_web():
-    server_id = request.form.get("server_id")
     try:
-        count = sync_unifi_devices(int(server_id)) if server_id else sync_unifi_devices()
+        count = sync_unifi_devices()  # Function doesn't accept server_id parameter
         flash(f"Synced {count} devices successfully.", "success")
     except Exception as e:
         flash(f"Error syncing devices: {str(e)}", "error")

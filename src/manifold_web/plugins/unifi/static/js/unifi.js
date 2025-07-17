@@ -9,6 +9,18 @@ document.addEventListener("click", function (event) {
     if (!event.target.classList.contains("kabob-button")) {
         document.querySelectorAll('.kabob-menu').forEach(menu => menu.classList.add('hidden'));
     }
+    
+    // Close modals when clicking outside
+    if (event.target.classList.contains('modal')) {
+        event.target.classList.add('hidden');
+    }
+});
+
+// Close modals with Escape key
+document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+        document.querySelectorAll('.modal').forEach(modal => modal.classList.add('hidden'));
+    }
 });
 
 function fetchSites(serverId, serverName) {
@@ -36,8 +48,6 @@ function submitSyncSites() {
 }
 
 function submitSyncDevices(serverId = "") {
-    const input = document.getElementById("sync-devices-server-id");
-    input.value = serverId;
     document.getElementById("sync-devices-form").submit();
 }
 
@@ -96,9 +106,9 @@ State: ${data.state}`;
 }
 
 function showAddServerModal() {
-    // logic to display modal
-    const modal = document.getElementById("addServerModal");
-    if (modal) {
-        modal.style.display = "block";
-    }
+    document.getElementById("addServerModal").classList.remove("hidden");
+}
+
+function hideAddServerModal() {
+    document.getElementById("addServerModal").classList.add("hidden");
 }

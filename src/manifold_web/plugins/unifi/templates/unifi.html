@@ -6,9 +6,7 @@
 
 <h2>UniFi Network Servers</h2>
 <form id="sync-sites-form" method="POST" action="/unifi/sync-sites" style="display:none;"></form>
-<form id="sync-devices-form" method="POST" action="/unifi/sync-devices" style="display:none;">
-    <input type="hidden" name="server_id" id="sync-devices-server-id">
-</form>
+<form id="sync-devices-form" method="POST" action="/unifi/sync-devices" style="display:none;"></form>
 <table class="data-table">
     <thead>
         <tr>
@@ -47,7 +45,7 @@
                         <a href="/unifi/{{ server.id }}/add-credentials">Add Credentials</a>
                         <a href="#" onclick="fetchSites({{ server.id }}, '{{ server.name }}')">Display Sites</a>
                         <a href="#" onclick="submitSyncSites()">Sync Sites</a>
-                        <a href="#" onclick="submitSyncDevices({{ server.id }})">Sync Devices</a>
+                        <a href="#" onclick="submitSyncDevices()">Sync Devices</a>
                     </div>
                 </div>
             </td>
@@ -57,6 +55,34 @@
 </table>
 
 <!-- Modals for Add/Edit/Creds and Site Info -->
+<div id="addServerModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="hideAddServerModal()">&times;</span>
+        <h3>Add UniFi Server</h3>
+        <form method="POST" action="/unifi/add">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" required>
+            
+            <label for="host">Host:</label>
+            <input type="text" id="host" name="host" required>
+            
+            <label for="port">Port:</label>
+            <input type="number" id="port" name="port" value="8443" required>
+            
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+            
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+            
+            <div class="modal-actions">
+                <button type="button" onclick="hideAddServerModal()" class="command-button">Cancel</button>
+                <button type="submit" class="command-button">Add Server</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="lookup-modal" class="modal hidden">
     <div class="modal-content">
         <h3>Lookup Device</h3>

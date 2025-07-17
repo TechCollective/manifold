@@ -2,6 +2,7 @@ import typer
 from rich import print
 from rich.table import Table
 from typing import Optional
+import inspect
 
 from manifold_core.plugins.autotask.core import (
     list_autotask_integrations,
@@ -10,6 +11,8 @@ from manifold_core.plugins.autotask.core import (
     delete_autotask_integration,
     set_autotask_credentials,
 )
+from manifold_core.plugins.autotask.webhooks import list_webhooks as core_list_webhooks
+
 
 autotask_app = typer.Typer(help="Manage Autotask integrations")
 
@@ -101,3 +104,42 @@ def add_credentials(
         print(f"[green]Credentials set for Autotask integration {id}.[/green]")
     except Exception as e:
         print(f"[red]Failed to set credentials: {e}[/red]")
+
+@autotask_app.command("list-webhooks")
+def list_webhooks(
+    id: int = typer.Argument(..., help="Autotask integration ID")
+):
+    """List webhooks registered with Autotask for a specific integration."""
+
+    # 🚨 Development safeguard: Detect accidental recursive call
+    if inspect.currentframe().f_back.f_globals.get('list_webhooks') is list_webhooks:
+        print("[red]Recursive call detected — you may be shadowing the core list_webhooks function.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        webhooks = core_list_webhooks(id)
+    except Exception as e:
+        print(f"[red]Failed to retrieve webhooks: {e}[/red]")
+        raise typer.Exit(code=1)
+
+    if not webhooks:
+        print("[yellow]No webhooks found.[/yellow]")
+        return
+
+    table = Table(title=f"Webhooks for Autotask Integration {id}")
+    table.add_column("ID", style="dim")
+    table.add_column("Entity")
+    table.add_column("Event")
+    table.add_column("URL", style="magenta")
+    table.add_column("Active", justify="center")
+
+    for hook in webhooks:
+        table.add_row(
+            str(hook.id),
+            hook.entity,
+            hook.event,
+            hook.url,
+            "✅" if hook.is_active else "❌",
+        )
+
+    print(table)
