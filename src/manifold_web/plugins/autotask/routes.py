@@ -6,15 +6,16 @@ from manifold_core.plugins.autotask.core import (
     delete_autotask_integration,
     set_autotask_credentials,
 )
-
+from manifold_web.utils.integration_config import get_integration_config
 
 autotask_bp = Blueprint("autotask", __name__, url_prefix="/autotask", template_folder="templates")
-
 
 @autotask_bp.route("/")
 def index():
     integrations = list_autotask_integrations()
-    return render_template("autotask_list.html", integrations=integrations)
+    config = get_integration_config('autotask')
+    context = config.get_template_context(integrations)
+    return render_template("integration_base.html", **context)
 
 
 @autotask_bp.route("/add", methods=["GET", "POST"])

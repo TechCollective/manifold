@@ -3,6 +3,7 @@ from manifold_core.models.base import SessionLocal
 from manifold_core.plugins.slack.models import SlackIntegrationDB
 from manifold_core.plugins.slack.api import SlackAPI
 from manifold_core.secrets.get import get_secret_backend
+from manifold_core.utils.cache import cached_has_secret, get_secret_cache
 import logging
 
 
@@ -13,6 +14,8 @@ class SlackIntegrationInfo:
         self.id = record.id
         self.name = record.name
         self.workspace = record.workspace
+        self.user_id = record.user_id
+        self.is_active = record.is_active
         self.has_token = has_token
 
 
@@ -25,7 +28,7 @@ def list_slack_integrations() -> List[SlackIntegrationInfo]:
 
     for record in records:
         key = f"slack:{record.name}:token"
-        token_exists = secrets.has_secret(key)
+        token_exists = cached_has_secret(secrets, key)
         result.append(SlackIntegrationInfo(record, token_exists))
 
     session.close()
@@ -71,25 +74,37 @@ def delete_slack_integration(slack_id: str) -> None:
         session.close()
         raise ValueError("Integration not found")
 
-    # Delete associated token
     secrets = get_secret_backend()
-    secrets.delete_secret(f"slack:{record.name}:token")
+
+    # Try deleting token secret
+    try:
+        secrets.delete_secret(f"slack:{record.name}:token")
+    except ValueError:
+        pass  # Secret may not exist — that's fine
+
+    # Invalidate cache for this integration's token
+    cache = get_secret_cache()
+    cache.invalidate(f"slack:{record.name}:token")
 
     session.delete(record)
     session.commit()
     session.close()
 
 
-def set_slack_token(slack_id: str, token: str) -> None:
+def set_slack_token(integration_name: str, token: str) -> None:
     session = SessionLocal()
-    record = session.query(SlackIntegrationDB).filter_by(id=slack_id).first()
+    integration = session.query(SlackIntegrationDB).filter_by(name=integration_name).first()
     session.close()
 
-    if not record:
-        raise ValueError("Integration not found")
+    if not integration:
+        raise ValueError("Slack integration not found")
 
     secrets = get_secret_backend()
-    secrets.set_secret(f"slack:{record.name}:token", token)
+    secrets.set_secret(f"slack:{integration_name}:token", token)
+    
+    # Invalidate cache for this integration's token
+    cache = get_secret_cache()
+    cache.invalidate(f"slack:{integration_name}:token")
 
 def get_slack_name() -> str:
     session = SessionLocal()

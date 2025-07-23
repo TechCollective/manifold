@@ -10,3 +10,8 @@ class Backend(SecretBackend):
         if not value:
             raise KeyError(f"Missing required secret: {key}")
         return value
+    
+    def has_secret(self, key: str) -> bool:
+        """Check if an environment variable exists and has a value"""
+        value = os.getenv(key)
+        return value is not None and value.strip() != ""

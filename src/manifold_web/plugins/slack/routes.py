@@ -5,13 +5,16 @@ from manifold_core.plugins.slack.core import (
     delete_slack_integration,
     set_slack_token,
 )
+from manifold_web.utils.integration_config import get_integration_config
 
 slack_bp = Blueprint("slack", __name__, url_prefix="/slack", template_folder="templates")
 
 @slack_bp.route("/")
 def slack_index():
     integrations = list_slack_integrations()
-    return render_template("slack_list.html", integrations=integrations)
+    config = get_integration_config('slack')
+    context = config.get_template_context(integrations)
+    return render_template("integration_base.html", **context)
 
 
 @slack_bp.route("/add", methods=["GET", "POST"])

@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}{{ integration_title }} | Manifold{% endblock %}
+
+{% block content %}
+<h2>{{ integration_title }}</h2>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            {% for column in columns %}
+            <th>{{ column.label }}</th>
+            {% endfor %}
+            <th>Credentials</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in integrations %}
+        <tr>
+            {% for column in columns %}
+            <td>
+                {% if column.type == 'text' %}
+                    {{ item[column.field] }}
+                {% elif column.type == 'boolean' %}
+                    {{ '✔' if item[column.field] else '✘' }}
+                {% elif column.type == 'link' %}
+                    <a href="{{ item[column.field] }}" target="_blank">{{ item[column.field] }}</a>
+                {% elif column.type == 'custom' %}
+                    {{ column.render(item) | safe }}
+                {% endif %}
+            </td>
+            {% endfor %}
+            <td>{{ '✔' if item.has_credentials else '✘' }}</td>
+            <td>
+                <div class="kabob-container" id="kabob-{{ item.id }}">
+                    <button class="kabob-button" onclick="toggleKabobMenu('{{ item.id }}')">⋮</button>
+                    <div class="kabob-menu hidden">
+                        <!-- Standard Actions -->
+                        <a href="/{{ integration_name }}/edit/{{ item.id }}">Edit</a>
+                        <a href="/{{ integration_name }}/credentials/{{ item.id }}">{{ 'Edit' if item.has_credentials else 'Add' }} Credentials</a>
+                        <a href="#" onclick="deleteIntegration('{{ integration_name }}', {{ item.id }}, '{{ item.name }}')">Delete</a>
+                        
+                        <!-- Custom Actions -->
+                        {% if custom_actions %}
+                            {% for action in custom_actions %}
+                            <a href="#" onclick="{{ action.onclick }}({{ item.id }}, '{{ item.name }}')">{{ action.label }}</a>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="/{{ integration_name }}/add" class="btn btn-primary mt-3">+ Add {{ integration_title }}</a>
+
+<!-- UniFi Modals (needed for custom actions) -->
+{% if integration_name == 'unifi' %}
+<!-- Display Sites Modal -->
+<div id="sites-modal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="hideSitesModal()">&times;</span>
+        <h3>Sites for <span id="sites-modal-title">...</span></h3>
+        <table class="styled-table" id="sites-table">
+            <thead>
+                <tr>
+                    <th>Site Name</th>
+                    <th>Description</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody id="sites-table-body">
+                <!-- Populated via JavaScript -->
+            </tbody>
+        </table>
+        <div class="modal-actions">
+            <button onclick="hideSitesModal()" class="command-button">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Lookup Device Modal -->
+<div id="lookup-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Lookup Device</h3>
+        <span class="close" onclick="hideLookupModal()">&times;</span>
+        <form id="lookup-form" onsubmit="submitDeviceLookup(event)">
+            <input type="text" id="lookup-identifier" placeholder="Enter MAC or Serial" required>
+            <button type="submit" class="command-button">Lookup</button>
+        </form>
+        <pre id="lookup-results" style="white-space: pre-wrap; margin-top: 1em;"></pre>
+    </div>
+</div>
+
+<!-- Hidden forms for UniFi actions -->
+<form id="sync-devices-form" method="POST" action="/unifi/sync-devices" style="display:none;"></form>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="hideDeleteModal()">&times;</span>
+        <h3>Confirm Delete</h3>
+        <p>Are you sure you want to delete <span id="deleteItemName"></span>?</p>
+        <div class="modal-actions">
+            <button onclick="hideDeleteModal()" class="command-button">Cancel</button>
+            <button onclick="confirmDelete()" class="command-button btn-danger">Delete</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/integration_actions.js') }}"></script>
+
+{% block scripts %}{% endblock %}
+
+<script>
+let deleteUrl = '';
+
+function deleteIntegration(integrationName, itemId, itemName) {
+    deleteUrl = `/${integrationName}/delete/${itemId}`;
+    document.getElementById('deleteItemName').textContent = itemName;
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function confirmDelete() {
+    if (deleteUrl) {
+        fetch(deleteUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        }).then(() => {
+            window.location.reload();
+        });
+    }
+}
+
+function hideDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+}
+
+// Close modals when clicking outside
+document.addEventListener("click", function (event) {
+    if (!event.target.classList.contains("kabob-button")) {
+        document.querySelectorAll('.kabob-menu').forEach(menu => menu.classList.add('hidden'));
+    }
+    
+    if (event.target.classList.contains('modal')) {
+        event.target.classList.add('hidden');
+    }
+});
+
+// Close modals with Escape key
+document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+        document.querySelectorAll('.modal').forEach(modal => modal.classList.add('hidden'));
+    }
+});
+
+function toggleKabobMenu(id) {
+    document.querySelectorAll('.kabob-menu').forEach(menu => menu.classList.add('hidden'));
+    const container = document.getElementById(`kabob-${id}`);
+    const menu = container.querySelector('.kabob-menu');
+    menu.classList.toggle('hidden');
+}
+</script>
+{% endblock %} 

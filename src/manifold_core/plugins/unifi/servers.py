@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from manifold_core.models.base import SessionLocal
 from manifold_core.plugins.unifi.models import UnifiServer
 from manifold_core.secrets.get import get_secret_backend
+from manifold_core.utils.cache import cached_has_secret, get_secret_cache
 
 
 class ServerInfo:
@@ -21,8 +22,8 @@ def list_unifi_servers() -> List[ServerInfo]:
     result = []
 
     for s in servers:
-        has_username = secrets.has_secret(f"unifi:{s.name}:username")
-        has_password = secrets.has_secret(f"unifi:{s.name}:password")
+        has_username = cached_has_secret(secrets, f"unifi:{s.name}:username")
+        has_password = cached_has_secret(secrets, f"unifi:{s.name}:password")
         result.append(ServerInfo(s, has_username and has_password))
 
     session.close()
@@ -74,6 +75,11 @@ def delete_unifi_server(server_id: int) -> None:
         session.close()
         raise ValueError("Server not found")
 
+    # Invalidate cache for this server's credentials before deletion
+    cache = get_secret_cache()
+    cache.invalidate(f"unifi:{server.name}:username")
+    cache.invalidate(f"unifi:{server.name}:password")
+
     session.delete(server)
     session.commit()
     session.close()
@@ -90,3 +96,8 @@ def set_unifi_credentials(server_id: int, username: str, password: str) -> None:
     secrets = get_secret_backend()
     secrets.set_secret(f"unifi:{server.name}:username", username)
     secrets.set_secret(f"unifi:{server.name}:password", password)
+    
+    # Invalidate cache for this server's credentials
+    cache = get_secret_cache()
+    cache.invalidate(f"unifi:{server.name}:username")
+    cache.invalidate(f"unifi:{server.name}:password")

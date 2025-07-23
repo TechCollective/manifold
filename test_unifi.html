@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UniFi Test</title>
+    <style>
+        .hidden { display: none !important; }
+        .tab { padding: 10px; margin: 5px; border: 1px solid #ccc; cursor: pointer; }
+        .tab.active { background: #e0e0e0; }
+        .actions-area { padding: 20px; border: 1px solid #ddd; margin: 10px 0; }
+        .kabob-container { position: relative; }
+        .kabob-button { padding: 5px 10px; }
+        .kabob-menu { position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ccc; padding: 10px; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .modal-content { background: white; margin: 10% auto; padding: 20px; width: 80%; max-width: 500px; }
+    </style>
+</head>
+<body>
+    <h1>UniFi Functionality Test</h1>
+    
+    <!-- Test tabs -->
+    <div class="tab-container">
+        <div class="tab active" onclick="switchTab('servers')" id="tab-servers">Servers</div>
+        <div class="tab" onclick="switchTab('sites')" id="tab-sites">Sites</div>
+        <div class="tab" onclick="switchTab('admins')" id="tab-admins">Admins</div>
+        <div class="tab" onclick="switchTab('devices')" id="tab-devices">Devices</div>
+    </div>
+    
+    <!-- Test action areas -->
+    <div class="actions-area" id="actions-servers">
+        <h3>Servers Area</h3>
+        <button onclick="showAddServerModal()">Add Server</button>
+    </div>
+    
+    <div class="actions-area hidden" id="actions-sites">
+        <h3>Sites Area</h3>
+        <p>Sites functionality</p>
+    </div>
+    
+    <div class="actions-area hidden" id="actions-admins">
+        <h3>Admins Area</h3>
+        <p>Admins functionality</p>
+    </div>
+    
+    <div class="actions-area hidden" id="actions-devices">
+        <h3>Devices Area</h3>
+        <p>Devices functionality</p>
+    </div>
+    
+    <!-- Test kabob menu -->
+    <div class="kabob-container" id="kabob-test">
+        <button class="kabob-button" onclick="toggleKabobMenu('test')">⋮</button>
+        <div class="kabob-menu hidden">
+            <a href="#" onclick="alert('Edit clicked')">Edit</a>
+            <a href="#" onclick="alert('Delete clicked')">Delete</a>
+        </div>
+    </div>
+    
+    <!-- Test modal -->
+    <div id="addServerModal" class="modal hidden">
+        <div class="modal-content">
+            <span onclick="hideAddServerModal()">&times;</span>
+            <h3>Add Server Modal</h3>
+            <p>This is a test modal.</p>
+        </div>
+    </div>
+    
+    <script>
+        // Test functions
+        function switchTab(tabName) {
+            console.log('switchTab called with:', tabName);
+            
+            // Hide all action areas
+            document.querySelectorAll('.actions-area').forEach(area => {
+                area.classList.add('hidden');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected action area
+            const actionArea = document.getElementById(`actions-${tabName}`);
+            if (actionArea) {
+                actionArea.classList.remove('hidden');
+                console.log('Showing action area:', `actions-${tabName}`);
+            } else {
+                console.error('Action area not found:', `actions-${tabName}`);
+            }
+            
+            // Add active class to selected tab
+            const tab = document.getElementById(`tab-${tabName}`);
+            if (tab) {
+                tab.classList.add('active');
+                console.log('Activated tab:', `tab-${tabName}`);
+            } else {
+                console.error('Tab not found:', `tab-${tabName}`);
+            }
+        }
+        
+        function showAddServerModal() {
+            console.log('showAddServerModal called');
+            document.getElementById("addServerModal").classList.remove("hidden");
+        }
+        
+        function hideAddServerModal() {
+            console.log('hideAddServerModal called');
+            document.getElementById("addServerModal").classList.add("hidden");
+        }
+        
+        function toggleKabobMenu(id) {
+            console.log('toggleKabobMenu called with id:', id);
+            document.querySelectorAll('.kabob-menu').forEach(menu => menu.classList.add('hidden'));
+            const container = document.getElementById(`kabob-${id}`);
+            if (container) {
+                const menu = container.querySelector('.kabob-menu');
+                if (menu) {
+                    menu.classList.toggle('hidden');
+                    console.log('Toggled kabob menu for id:', id);
+                } else {
+                    console.error('Kabob menu not found in container:', id);
+                }
+            } else {
+                console.error('Kabob container not found:', id);
+            }
+        }
+        
+        console.log('Test page loaded');
+        console.log('switchTab function:', typeof switchTab);
+        console.log('showAddServerModal function:', typeof showAddServerModal);
+        console.log('toggleKabobMenu function:', typeof toggleKabobMenu);
+    </script>
+</body>
+</html> 

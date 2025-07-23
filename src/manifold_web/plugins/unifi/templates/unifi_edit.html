@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Edit UniFi Server | Manifold{% endblock %}
+
+{% block content %}
+<h2>Edit UniFi Server</h2>
+
+<div class="actions-area">
+    <div class="actions-header">
+        <h3>Edit Server: {{ server.name }}</h3>
+    </div>
+</div>
+
+<form method="POST" action="/unifi/edit/{{ server.id }}">
+    <div class="form-group">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" value="{{ server.name }}" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="host">Host:</label>
+        <input type="text" id="host" name="host" value="{{ server.host }}" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="port">Port:</label>
+        <input type="number" id="port" name="port" value="{{ server.port }}" required>
+    </div>
+    
+    <div class="modal-actions">
+        <a href="/unifi" class="command-button">Cancel</a>
+        <button type="submit" class="command-button">Update Server</button>
+    </div>
+</form>
+
+<style>
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+</style>
+{% endblock %} 

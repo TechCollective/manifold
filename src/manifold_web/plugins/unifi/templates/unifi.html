@@ -5,54 +5,177 @@
 {% block content %}
 
 <h2>UniFi Network Servers</h2>
+
+<!-- Actions Navigation -->
+<div class="tab-container">
+    <div class="tab active" onclick="switchTab('servers')" id="tab-servers">Servers</div>
+    <div class="tab" onclick="switchTab('sites')" id="tab-sites">Sites</div>
+    <div class="tab" onclick="switchTab('admins')" id="tab-admins">Admins</div>
+    <div class="tab" onclick="switchTab('devices')" id="tab-devices">Devices</div>
+    <div class="tab" onclick="switchTab('alerts')" id="tab-alerts">Alerts</div>
+</div>
+
+<!-- Actions Area -->
+<div class="actions-area" id="actions-servers">
+    <div class="actions-header">
+        <h3>Server Management</h3>
+        <div class="actions-buttons">
+            <button class="command-button" onclick="showAddServerModal()">
+                <i class="fa-solid fa-plus"></i> Add Server
+            </button>
+            <button class="command-button" onclick="refreshServerList()">
+                <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+        </div>
+    </div>
+    
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Host</th>
+                <th>Port</th>
+                <th>Credentials</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for server in unifi_servers %}
+            <tr>
+                <td>{{ server.name }}</td>
+                <td>{{ server.host }}</td>
+                <td>{{ server.port }}</td>
+                <td>{{ '✔' if server.has_credentials else '✘' }}</td>
+                <td>
+                    <div class="kabob-container" id="kabob-{{ server.id }}">
+                        <button class="kabob-button" onclick="toggleKabobMenu('{{ server.id }}')">⋮</button>
+                        <div class="kabob-menu hidden">
+                            <a href="/unifi/{{ server.id }}/edit">Edit</a>
+                            <a href="#" onclick="deleteServer({{ server.id }}, '{{ server.name }}')">Delete</a>
+                            <a href="/unifi/{{ server.id }}/add-credentials">Add Credentials</a>
+                            <a href="#" onclick="fetchSites({{ server.id }}, '{{ server.name }}')">Display Sites</a>
+                            <a href="#" onclick="fetchAdmins({{ server.id }}, '{{ server.name }}')">Display Admins</a>
+                            <a href="#" onclick="submitSyncSites()">Sync Sites</a>
+                            <a href="#" onclick="submitSyncDevices()">Sync Devices</a>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Sites Tab -->
+<div class="actions-area hidden" id="actions-sites">
+    <div class="actions-header">
+        <h3>Site Management</h3>
+        <div class="actions-buttons">
+            <button class="command-button" onclick="submitSyncSites()">
+                <i class="fa-solid fa-sync"></i> Sync Sites
+            </button>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Site Description</th>
+                <th>Site ID</th>
+            </tr>
+        </thead>
+        <tbody id="sites-table-body">
+            <!-- Populated via JavaScript -->
+        </tbody>
+    </table>
+</div>
+
+<div class="actions-area hidden" id="actions-admins">
+    <div class="actions-header">
+        <h3>Admin Management</h3>
+        <div class="actions-buttons">
+            <button class="command-button" onclick="showAdminSearch()">
+                <i class="fa-solid fa-search"></i> Search Admin
+            </button>
+                                    <button class="command-button" onclick="submitSyncAdmins()">
+                            <i class="fa-solid fa-sync"></i> Sync Admins
+                        </button>
+        </div>
+    </div>
+    
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+            </tr>
+        </thead>
+        <tbody id="admins-table-body">
+            <!-- Populated via JavaScript -->
+        </tbody>
+    </table>
+</div>
+
+<div class="actions-area hidden" id="actions-devices">
+    <div class="actions-header">
+        <h3>Device Management</h3>
+        <div class="actions-buttons">
+            <button class="command-button" onclick="submitSyncDevices()">
+                <i class="fa-solid fa-sync"></i> Sync Devices
+            </button>
+            <button class="command-button" onclick="console.log('Lookup button clicked'); openLookupModal();">
+                <i class="fa-solid fa-search"></i> Lookup Device
+            </button>
+        </div>
+    </div>
+    
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Site Description</th>
+                <th>Device</th>
+                <th>Model</th>
+                <th>Serial</th>
+            </tr>
+        </thead>
+        <tbody id="devices-table-body">
+            <!-- Populated via JavaScript -->
+        </tbody>
+    </table>
+</div>
+
+<!-- Alerts Tab -->
+<div class="actions-area hidden" id="actions-alerts">
+    <div class="actions-header">
+        <h3>Alert Management</h3>
+        <div class="actions-buttons">
+            <button class="command-button" onclick="submitSyncAlerts()">
+                <i class="fa-solid fa-sync"></i> Sync Alerts
+            </button>
+        </div>
+    </div>
+    
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>Site</th>
+                <th>Device</th>
+                <th>Message</th>
+                <th>Key</th>
+                <th>Archived</th>
+            </tr>
+        </thead>
+        <tbody id="alerts-table-body">
+            <!-- Populated via JavaScript -->
+        </tbody>
+    </table>
+</div>
+
 <form id="sync-sites-form" method="POST" action="/unifi/sync-sites" style="display:none;"></form>
+<form id="sync-admins-form" method="POST" action="/unifi/sync-admins" style="display:none;"></form>
 <form id="sync-devices-form" method="POST" action="/unifi/sync-devices" style="display:none;"></form>
-<table class="data-table">
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Host</th>
-            <th>Port</th>
-            <th>Credentials</th>
-            <th>
-                Actions
-                <div class="kabob-container" id="kabob-global">
-                    <button class="kabob-button" onclick="toggleKabobMenu('global')">⋮</button>
-                    <div class="kabob-menu hidden">
-                        <a href="#" onclick="showAddServerModal()">Add Server</a>
-                        <a href="#" onclick="refreshServerList()">Refresh</a>
-                        <a href="#" onclick="showAllSites()">Display All Sites</a>
-                        <a href="#" onclick="submitSyncDevices()">Sync All Devices</a>
-                        <a href="#" onclick="openLookupModal()">Lookup Device</a>
-                    </div>
-                </div>
-            </th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for server in unifi_servers %}
-        <tr>
-            <td>{{ server.name }}</td>
-            <td>{{ server.host }}</td>
-            <td>{{ server.port }}</td>
-            <td>{{ '✔' if server.has_credentials else '✘' }}</td>
-            <td>
-                <div class="kabob-container" id="kabob-{{ server.id }}">
-                    <button class="kabob-button" onclick="toggleKabobMenu('{{ server.id }}')">⋮</button>
-                    <div class="kabob-menu hidden">
-                        <a href="/unifi/{{ server.id }}/edit">Edit</a>
-                        <a href="/unifi/{{ server.id }}/delete">Delete</a>
-                        <a href="/unifi/{{ server.id }}/add-credentials">Add Credentials</a>
-                        <a href="#" onclick="fetchSites({{ server.id }}, '{{ server.name }}')">Display Sites</a>
-                        <a href="#" onclick="submitSyncSites()">Sync Sites</a>
-                        <a href="#" onclick="submitSyncDevices()">Sync Devices</a>
-                    </div>
-                </div>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<form id="sync-alerts-form" method="POST" action="/unifi/sync-alerts" style="display:none;"></form>
 
 <!-- Modals for Add/Edit/Creds and Site Info -->
 <div id="addServerModal" class="modal hidden">
@@ -96,10 +219,173 @@
     </div>
 </div>
 
+<div id="admins-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>UniFi Admins</h3>
+        <span class="close" onclick="hideAdminsModal()">&times;</span>
+        <div id="admins-content">
+            <div class="loading">Loading admins...</div>
+        </div>
+    </div>
+</div>
 
-{% include 'unifi_modals.html' %}
+<div id="admin-detail-modal" class="modal hidden">
+    <div class="modal-content large-modal">
+        <span class="close" onclick="hideAdminDetailModal()">&times;</span>
+        <div id="admin-detail-content">
+            <!-- Admin info section -->
+            <div class="admin-info-section">
+                <h3 id="admin-detail-name">Admin Name</h3>
+                <p id="admin-detail-email">admin@example.com</p>
+                <p id="admin-detail-role"><strong>Role:</strong> <span id="admin-role-text">Unknown</span></p>
+            </div>
+            
+            <!-- Action buttons -->
+            <div class="admin-actions">
+                <button class="command-button" onclick="revokeSelectedSites()">
+                    <i class="fa-solid fa-ban"></i> Revoke
+                </button>
+                <button class="command-button" onclick="addSelectedSites()">
+                    <i class="fa-solid fa-plus"></i> Add
+                </button>
+                <button class="command-button" onclick="modifySelectedSites()">
+                    <i class="fa-solid fa-edit"></i> Modify
+                </button>
+                <button id="revoke-super-admin-btn" class="command-button danger" onclick="showRevokeSuperAdminConfirm()" style="display: none;">
+                    <i class="fa-solid fa-user-slash"></i> Revoke Super Admin
+                </button>
+            </div>
+            
+            <!-- Sites table -->
+            <div class="sites-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>
+                                <input type="checkbox" id="select-all-sites" onchange="toggleAllSites()">
+                            </th>
+                            <th>Site Name</th>
+                            <th>Site Description</th>
+                            <th>Server</th>
+                            <th>Current Role</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-sites-table-body">
+                        <!-- Populated via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="role-modify-modal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="hideRoleModifyModal()">&times;</span>
+        <h3>Modify Role</h3>
+        <div class="role-options">
+            <label>
+                <input type="radio" name="new-role" value="admin" checked>
+                Admin
+            </label>
+            <label>
+                <input type="radio" name="new-role" value="hotspot">
+                HotSpot Manager
+            </label>
+            <label>
+                <input type="radio" name="new-role" value="readonly">
+                Read Only
+            </label>
+        </div>
+        <div class="modal-actions">
+            <button type="button" onclick="hideRoleModifyModal()" class="command-button">Cancel</button>
+            <button type="button" onclick="applyRoleChange()" class="command-button">Apply</button>
+        </div>
+    </div>
+</div>
+
+<div id="revoke-super-admin-modal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="hideRevokeSuperAdminConfirm()">&times;</span>
+        <h3>Revoke Super Admin Status</h3>
+        <p>Are you sure you want to revoke super admin status from <strong id="revoke-admin-name">this admin</strong>?</p>
+        <p>This action will remove their super admin privileges across all sites.</p>
+        <div class="modal-actions">
+            <button type="button" onclick="hideRevokeSuperAdminConfirm()" class="command-button">Cancel</button>
+            <button type="button" onclick="confirmRevokeSuperAdmin()" class="command-button danger">Revoke Super Admin</button>
+        </div>
+    </div>
+</div>
+
+<div id="admin-info-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Admin Information</h3>
+        <span class="close" onclick="hideAdminInfoModal()">&times;</span>
+        <div id="admin-info-content">
+            <div class="loading">Loading admin information...</div>
+        </div>
+    </div>
+</div>
+
+<div id="remove-admin-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Remove Admin</h3>
+        <span class="close" onclick="hideRemoveAdminModal()">&times;</span>
+        <form id="remove-admin-form" onsubmit="submitRemoveAdmin(event)">
+            <p>Are you sure you want to remove this admin from all sites?</p>
+            <div id="remove-admin-details"></div>
+            <label for="exclude-sites">Exclude sites (comma-separated):</label>
+            <input type="text" id="exclude-sites" placeholder="site1,site2,site3">
+            <div class="modal-actions">
+                <button type="button" onclick="hideRemoveAdminModal()" class="command-button">Cancel</button>
+                <button type="submit" class="command-button danger">Remove Admin</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="admin-search-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Search Admins</h3>
+        <span class="close" onclick="hideAdminSearchModal()">&times;</span>
+        <form id="admin-search-form" onsubmit="submitAdminSearch(event)">
+            <label for="search-term">Search by name or email:</label>
+            <input type="text" id="search-term" placeholder="Enter admin name or email" required>
+            <div class="modal-actions">
+                <button type="button" onclick="hideAdminSearchModal()" class="command-button">Cancel</button>
+                <button type="submit" class="command-button">Search</button>
+            </div>
+        </form>
+        <div id="search-results" style="margin-top: 20px;"></div>
+    </div>
+</div>
+
+<!-- Sites Modal -->
+<div id="sites-modal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="hideSitesModal()">&times;</span>
+        <h3>Sites for <span id="sites-modal-title">...</span></h3>
+        <table class="styled-table" id="sites-table">
+            <thead>
+                <tr>
+                    <th>Site Name</th>
+                    <th>Description</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody id="sites-table-body">
+                <!-- Populated via JavaScript -->
+            </tbody>
+        </table>
+        <div class="modal-actions">
+            <button onclick="hideSitesModal()" class="command-button">Close</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/integration_actions.js') }}"></script>
 <script src="{{ url_for('static', filename='js/unifi.js') }}"></script>
 {% endblock %}

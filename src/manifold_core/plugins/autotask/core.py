@@ -2,15 +2,17 @@ from typing import List
 from manifold_core.models.base import SessionLocal
 from manifold_core.plugins.autotask.models import AutotaskIntegrationDB
 from manifold_core.secrets.get import get_secret_backend
-from manifold_core.plugins.autotask.api import AutotaskAPI
+from manifold_core.utils.cache import cached_has_secret, get_secret_cache
 
 
 class AutotaskIntegrationInfo:
-    def __init__(self, record: AutotaskIntegrationDB, has_creds: bool):
+    def __init__(self, record: AutotaskIntegrationDB, has_credentials: bool):
         self.id = record.id
         self.name = record.name
         self.api_url = record.api_url
-        self.has_credentials = has_creds
+        self.is_active = record.is_active
+        self.has_credentials = has_credentials
+
 
 def list_autotask_integrations() -> List[AutotaskIntegrationInfo]:
     session = SessionLocal()
@@ -19,8 +21,8 @@ def list_autotask_integrations() -> List[AutotaskIntegrationInfo]:
     result = []
 
     for record in integrations:
-        has_user = secrets.has_secret(f"autotask:{record.name}:username")
-        has_secret = secrets.has_secret(f"autotask:{record.name}:secret")
+        has_user = cached_has_secret(secrets, f"autotask:{record.name}:username")
+        has_secret = cached_has_secret(secrets, f"autotask:{record.name}:secret")
         result.append(AutotaskIntegrationInfo(record, has_user and has_secret))
 
     session.close()
@@ -83,6 +85,11 @@ def delete_autotask_integration(autotask_id: int) -> None:
     except ValueError:
         pass
 
+    # Invalidate cache for this integration's credentials
+    cache = get_secret_cache()
+    cache.invalidate(f"autotask:{record.name}:username")
+    cache.invalidate(f"autotask:{record.name}:secret")
+
     session.delete(record)
     session.commit()
     session.close()
@@ -100,6 +107,11 @@ def set_autotask_credentials(autotask_id: int, username: str, integration_code: 
     secrets.set_secret(f"autotask:{record.name}:username", username)
     secrets.set_secret(f"autotask:{record.name}:integration_code", integration_code)
     secrets.set_secret(f"autotask:{record.name}:secret", secret)
+    
+    # Invalidate cache for this integration's credentials
+    cache = get_secret_cache()
+    cache.invalidate(f"autotask:{record.name}:username")
+    cache.invalidate(f"autotask:{record.name}:secret")
 
 
 def get_ticket(autotask_id: int, ticket_id: int) -> dict:

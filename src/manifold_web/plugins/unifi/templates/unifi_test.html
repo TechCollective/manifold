@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}UniFi Test | Manifold{% endblock %}
+
+{% block content %}
+<h2>UniFi Test Page</h2>
+
+<!-- Simple test buttons -->
+<div style="margin: 20px 0;">
+    <button onclick="testTabSwitch()" class="command-button">Test Tab Switch</button>
+    <button onclick="testModal()" class="command-button">Test Modal</button>
+    <button onclick="testKabob()" class="command-button">Test Kabob Menu</button>
+</div>
+
+<!-- Test tab system -->
+<div class="tab-container">
+    <div class="tab active" onclick="switchTab('servers')" id="tab-servers">Servers</div>
+    <div class="tab" onclick="switchTab('sites')" id="tab-sites">Sites</div>
+</div>
+
+<div class="actions-area" id="actions-servers">
+    <h3>Servers Area</h3>
+    <p>This is the servers area.</p>
+</div>
+
+<div class="actions-area hidden" id="actions-sites">
+    <h3>Sites Area</h3>
+    <p>This is the sites area.</p>
+</div>
+
+<!-- Test modal -->
+<div id="test-modal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="hideTestModal()">&times;</span>
+        <h3>Test Modal</h3>
+        <p>This is a test modal.</p>
+    </div>
+</div>
+
+<!-- Test kabob menu -->
+<div style="margin: 20px 0;">
+    <div class="kabob-container" id="kabob-test">
+        <button class="kabob-button" onclick="toggleKabobMenu('test')">⋮</button>
+        <div class="kabob-menu hidden">
+            <a href="#" onclick="alert('Edit clicked')">Edit</a>
+            <a href="#" onclick="alert('Delete clicked')">Delete</a>
+        </div>
+    </div>
+</div>
+
+<script>
+// Test functions
+function testTabSwitch() {
+    console.log('Testing tab switch...');
+    switchTab('sites');
+}
+
+function testModal() {
+    console.log('Testing modal...');
+    document.getElementById('test-modal').classList.remove('hidden');
+}
+
+function hideTestModal() {
+    document.getElementById('test-modal').classList.add('hidden');
+}
+
+function testKabob() {
+    console.log('Testing kabob menu...');
+    toggleKabobMenu('test');
+}
+
+// Debug info
+console.log('Test page loaded');
+console.log('switchTab function:', typeof switchTab);
+console.log('toggleKabobMenu function:', typeof toggleKabobMenu);
+</script>
+{% endblock %} 
